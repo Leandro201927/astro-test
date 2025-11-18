@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
+import { fileURLToPath } from 'node:url';
 
 import cloudflare from '@astrojs/cloudflare';
 
@@ -7,9 +8,16 @@ import cloudflare from '@astrojs/cloudflare';
 export default defineConfig({
   adapter: cloudflare({
     platformProxy: {
-      enabled: true
+      enabled: true,
+      configPath: './wrangler.jsonc'
     },
-
     imageService: "cloudflare"
-  })
+  }),
+  vite: {
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url))
+      }
+    }
+  }
 });

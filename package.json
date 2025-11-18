@@ -12,10 +12,12 @@
 	},
 	"dependencies": {
 		"@astrojs/cloudflare": "^12.6.11",
-		"astro": "^5.15.9"
+		"astro": "^5.15.9",
+		"jose": "^6.1.2"
 	},
 	"devDependencies": {
 		"@types/node": "^24.10.1",
+		"sass": "^1.94.1",
 		"wrangler": "^4.49.0"
 	}
 }
