@@ -2,12 +2,14 @@
 import type { Page } from '../types/clientWebsite';
 
 import { getPageContent } from '../lib/getPageContent';
-const page = await getPageContent({
-  locals: Astro.locals,
-  params: {
-		path: 'index'
-	}
-});
+// const page = await getPageContent({
+//   locals: Astro.locals,
+//   params: {
+// 		path: 'index'
+// 	}
+// });
+
+const page = { title: 'Inicio' }
 ---
 
 <html>
