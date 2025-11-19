@@ -1,7 +1,6 @@
 ---
 import "@/styles/index.scss";
 import { getPageContent } from "@/lib/getPageContent";
-import { getComponentByPath } from "@/utils/getComponentByPath";
 
 // Real
 // const page = getPageContent({
@@ -107,13 +106,25 @@ const ogImage = og.og_image || {};
 
 const alternates = page.hreflang_alternates || [];
 
-const renderedComponents = await Promise.all(
-  page.components.map(async (component) => {
-    const path = `${component.atomic_hierarchy}/${component.name}`;
-    const el = await getComponentByPath(path, component.custom_attrs || {});
-    return el;
-  })
-);
+const flattenProps = (input = {}) => {
+  const out = {} as Record<string, any>;
+  Object.entries(input as Record<string, any>).forEach(([k, v]) => {
+    if (v && typeof v === "object" && "type" in v && "value" in v) {
+      const val = (v as any).value;
+      out[k] = val;
+    } else {
+      out[k] = v;
+    }
+  });
+  return out;
+};
+import DynamicIsland from "@/components/system/DynamicIsland";
+const items = page.components.map((component) => {
+  const dir = (component.atomic_hierarchy as string).endsWith('s') ? component.atomic_hierarchy : `${component.atomic_hierarchy}s`;
+  const componentPath = `${dir}/${component.name}`;
+  const props = flattenProps(component.custom_attrs || {});
+  return { componentPath, props };
+});
 ---
 
 <html lang={page.language}>
@@ -147,6 +158,8 @@ const renderedComponents = await Promise.all(
     )}
   </head>
   <body>
-    {renderedComponents.map((El) => El)}
+    {items.map(({ componentPath, props }) => (
+      <DynamicIsland client:load componentPath={componentPath} props={props} />
+    ))}
   </body>
 </html>
