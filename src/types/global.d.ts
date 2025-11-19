@@ -1,10 +1,9 @@
 declare global {
   interface ImportMetaEnv {
-    readonly KV_NAMESPACE_ID: string;
-    readonly CLOUDFLARE_API_TOKEN: string;
-    readonly CLOUDFLARE_ACCOUNT_ID: string;
-    readonly CF_ACCESS_TEAM_DOMAIN: string;
-    readonly CF_ACCESS_POLICY_AUD: string;
+    readonly SUPABASE_URL: string;
+    readonly SUPABASE_ANON_KEY: string;
+    readonly PUBLIC_SUPABASE_URL: string;
+    readonly PUBLIC_SUPABASE_ANON_KEY: string;
   }
   interface ImportMeta {
     readonly env: ImportMetaEnv;

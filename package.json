@@ -4,20 +4,25 @@
 	"version": "0.0.1",
 	"scripts": {
 		"dev": "astro dev",
+		"dev:tunnel": "concurrently \"npm run dev\" \"wait-on http://localhost:4321 && cloudflared tunnel --url http://localhost:4321\"",
 		"build": "astro build",
 		"preview": "astro build && wrangler dev",
 		"astro": "astro",
 		"deploy": "astro build && wrangler deploy",
 		"cf-typegen": "wrangler types"
 	},
-	"dependencies": {
-		"@astrojs/cloudflare": "^12.6.11",
-		"astro": "^5.15.9",
-		"jose": "^6.1.2"
-	},
+  "dependencies": {
+    "@astrojs/cloudflare": "^12.6.11",
+    "astro": "^5.15.9",
+    "jose": "^6.1.2",
+    "@supabase/supabase-js": "^2.45.4",
+    "@supabase/ssr": "^0.5.5"
+  },
 	"devDependencies": {
 		"@types/node": "^24.10.1",
+		"concurrently": "^9.2.1",
 		"sass": "^1.94.1",
+		"wait-on": "^9.0.3",
 		"wrangler": "^4.49.0"
 	}
 }

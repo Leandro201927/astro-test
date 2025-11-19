@@ -1,13 +1,40 @@
 ---
-// src/pages/admin/index.astro
-export const prerender = false; // SSR obligatorio
+export const prerender = false;
+import { supabase } from "@/lib/supabase";
 
-const user = Astro.locals.user;
+const accessToken = Astro.cookies.get("sb-access-token");
+const refreshToken = Astro.cookies.get("sb-refresh-token");
 
-// Esto nunca debería pasar, pero por si acaso
-if (!user) {
-  return Astro.redirect('/');
+if (!accessToken || !refreshToken) {
+  return Astro.redirect("/admin/signin");
 }
+
+let session;
+try {
+  session = await supabase.auth.setSession({
+    refresh_token: refreshToken.value,
+    access_token: accessToken.value,
+  });
+  if (session.error) {
+    Astro.cookies.delete("sb-access-token", {
+      path: "/",
+    });
+    Astro.cookies.delete("sb-refresh-token", {
+      path: "/",
+    });
+    return Astro.redirect("/admin/signin");
+  }
+} catch (error) {
+  Astro.cookies.delete("sb-access-token", {
+    path: "/",
+  });
+  Astro.cookies.delete("sb-refresh-token", {
+    path: "/",
+  });
+  return Astro.redirect("/admin/signin");
+}
+
+const email = session.data.user?.email;
 ---
 
 <!DOCTYPE html>
@@ -126,20 +153,24 @@ if (!user) {
       font-size: 14px;
       margin-top: 8px;
     }
+    .logout { text-decoration: none; display: inline-block; padding: 8px 12px; font-size: 13px; border: 1px solid #e5e5e5; border-radius: 8px; color: #333; background: #fff; }
   </style>
 </head>
 <body>
   <header class="header">
     <div class="container header-content">
       <h1>🎛️ Panel de Administración</h1>
-      <div class="user-info">
-        <div class="avatar">
-          {user.email.charAt(0).toUpperCase()}
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div class="user-info">
+          <div class="avatar">
+            {email?.charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style="font-weight: 500;">{email?.split('@')[0]}</div>
+            <div style="font-size: 12px; color: #666;">{email}</div>
+          </div>
         </div>
-        <div>
-          <div style="font-weight: 500;">{user.name || user.email}</div>
-          <div style="font-size: 12px; color: #666;">{user.email}</div>
-        </div>
+        <a href="/api/auth/signout" class="logout">Cerrar sesión</a>
       </div>
     </div>
   </header>
@@ -147,9 +178,9 @@ if (!user) {
   <main class="main">
     <div class="container">
       <div class="welcome">
-        <h2>¡Bienvenido, {user.name || user.email.split('@')[0]}! 👋</h2>
+        <h2>¡Bienvenido, {email?.split('@')[0]}! 👋</h2>
         <p style="margin-top: 8px; color: #666;">
-          Estás autenticado mediante Cloudflare Access
+          Estás autenticado mediante Supabase
         </p>
         <span class="badge">✓ Autenticado</span>
       </div>
@@ -184,10 +215,8 @@ if (!user) {
         <h3 style="margin-bottom: 12px;">Información de Debug</h3>
         <pre style="background: #f5f5f5; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px;">
           {JSON.stringify({
-            email: user.email,
-            sub: user.sub,
-            name: user.name,
-            authenticated: user.isValid
+            email: email,
+            authenticated: !accessToken || !refreshToken,
           }, null, 2)}
         </pre>
       </div>
