@@ -1,13 +1,15 @@
 /* Variables */
-$color-primary: #8b5cf6;
-$color-background: #ffffff;
-$color-text: #111827;
+:root {
+  --color-primary: #8b5cf6;
+  --color-background: #ffffff;
+  --color-text: #111827;
+}
 
 /* Base */
 html,
 body {
   margin: 0;
   padding: 0;
-  background: $color-background;
-  color: $color-text;
+  background: var(--color-background);
+  color: var(--color-text);
 }

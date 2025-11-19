@@ -1,6 +1,10 @@
 ---
 import "@/styles/index.scss";
+import type { Page } from "@/types/clientWebsite";
+import { flattenProps } from "@/utils/flattenProps";
 import { getPageContent } from "@/lib/getPageContent";
+import Layout from "@/components/system/Layout.tsx";
+import DynamicIsland from "@/components/system/DynamicIsland";
 
 // Real
 // const page = getPageContent({
@@ -11,7 +15,7 @@ import { getPageContent } from "@/lib/getPageContent";
 // });
 
 // Mock
-const page = {
+const page: Page = {
   id: "7ab5952b-29ae-40c5-8734-3c8d94cc1460",
   slug: "nueva-pagina-1",
   type: "landing-page",
@@ -96,29 +100,6 @@ const page = {
   content_text_summary: "",
 };
 
-const metaTitle = page.meta_title || page.title;
-const metaDescription = page.meta_description || "";
-const canonical = page.canonical || null;
-const robots = `${page.noindex ? "noindex" : "index"}, ${page.nofollow ? "nofollow" : "follow"}${page.robots_extra ? ", " + page.robots_extra : ""}`;
-
-const og = page.open_graph || {};
-const ogImage = og.og_image || {};
-
-const alternates = page.hreflang_alternates || [];
-
-const flattenProps = (input = {}) => {
-  const out = {} as Record<string, any>;
-  Object.entries(input as Record<string, any>).forEach(([k, v]) => {
-    if (v && typeof v === "object" && "type" in v && "value" in v) {
-      const val = (v as any).value;
-      out[k] = val;
-    } else {
-      out[k] = v;
-    }
-  });
-  return out;
-};
-import DynamicIsland from "@/components/system/DynamicIsland";
 const items = page.components.map((component) => {
   const dir = (component.atomic_hierarchy as string).endsWith('s') ? component.atomic_hierarchy : `${component.atomic_hierarchy}s`;
   const componentPath = `${dir}/${component.name}`;
@@ -127,39 +108,10 @@ const items = page.components.map((component) => {
 });
 ---
 
-<html lang={page.language}>
-  <head>
-    <title>{metaTitle}</title>
-		<meta charset="UTF-8" />
-		<meta name="theme-color" content="#ffffff" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={metaDescription} />
-    <meta name="robots" content={robots} />
-		<link rel="sitemap" type="application/xml" href="/sitemap.xml" />
-    {canonical && <link rel="canonical" href={canonical} />}
-    {alternates.map((alt) => (
-      <link rel="alternate" hreflang={(alt as any).lang} href={(alt as any).url} />
-    ))}
-    <meta property="og:type" content={og.og_type || "website"} />
-    <meta property="og:title" content={og.og_title || metaTitle} />
-    <meta property="og:description" content={og.og_description || metaDescription} />
-    {ogImage.src && <meta property="og:image" content={ogImage.src} />}
-    {typeof ogImage.width === 'number' && ogImage.width > 0 && (
-      <meta property="og:image:width" content={String(ogImage.width)} />
-    )}
-    {typeof ogImage.height === 'number' && ogImage.height > 0 && (
-      <meta property="og:image:height" content={String(ogImage.height)} />
-    )}
-    <meta name="twitter:card" content={og.twitter_card || "summary"} />
-    {Object.keys(page.schema_org || {}).length > 0 && (
-      <script type="application/ld+json">
-        {JSON.stringify(page.schema_org)}
-      </script>
-    )}
-  </head>
-  <body>
-    {items.map(({ componentPath, props }) => (
-      <DynamicIsland client:load componentPath={componentPath} props={props} />
-    ))}
-  </body>
-</html>
+<Layout page={page}>
+	<>
+		{items.map(({ componentPath, props }) => (
+			<DynamicIsland client:load componentPath={componentPath} props={props} />
+		))}
+	</>
+</Layout>
