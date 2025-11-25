@@ -1,5 +1,5 @@
 ---
-import '@/styles/admin/signin.scss'
+import "@/styles/admin/signin.scss";
 
 const { cookies, redirect } = Astro;
 
@@ -11,7 +11,7 @@ if (accessToken && refreshToken) {
 }
 ---
 
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
@@ -27,7 +27,12 @@ if (accessToken && refreshToken) {
           <div class="meta">Área privada</div>
         </div>
         <div class="content">
-          <form id="form" action="/api/auth/signin" method="post" enctype="application/x-www-form-urlencoded"> 
+          <form
+            id="form"
+            action="/api/auth/signin"
+            method="post"
+            enctype="application/x-www-form-urlencoded"
+          >
             <div class="field">
               <label for="email">Correo electrónico</label>
               <input type="email" id="email" name="email" required />
@@ -37,7 +42,9 @@ if (accessToken && refreshToken) {
               <input type="password" id="password" name="password" required />
             </div>
             <div class="actions">
-              <button class="primary" type="submit" id="submit">Iniciar sesión</button>
+              <button class="primary" type="submit" id="submit"
+                >Iniciar sesión</button
+              >
             </div>
             <div class="error" id="error" hidden></div>
           </form>
@@ -45,39 +52,62 @@ if (accessToken && refreshToken) {
       </div>
     </div>
     <script>
-      const form = document.getElementById('form')!;
-      const errorBox = document.getElementById('error')!;
-      const password = document.getElementById('password')!;
-      form.addEventListener('submit', async (ev) => {
+      const form = document.getElementById("form")!;
+      const errorBox = document.getElementById("error")!;
+      const password = document.getElementById("password")!;
+      const submitBtn = document.getElementById("submit") as HTMLButtonElement;
+
+      form.addEventListener("submit", async (ev) => {
         ev.preventDefault();
         errorBox.hidden = true;
-        password.classList.remove('input-error');
-        const body = new URLSearchParams(new FormData(form as HTMLFormElement) as any);
-        const res = await fetch((form as any).action, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body
-        });
-        if (res.redirected) {
-          window.location.href = res.url;
-          return;
-        }
-        if (!res.ok) {
-          let msg = 'Error de autenticación';
-          try {
-            const data: any = await res.json();
-            if (data && data.error) msg = data.error;
-          } catch {
-            try { msg = await res.text(); } catch {}
+        password.classList.remove("input-error");
+
+        // Loading state
+        submitBtn.disabled = true;
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = "Cargando...";
+
+        try {
+          const body = new URLSearchParams(
+            new FormData(form as HTMLFormElement) as any,
+          );
+          const res = await fetch((form as any).action, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body,
+          });
+          if (res.redirected) {
+            window.location.href = res.url;
+            return;
           }
-          errorBox.textContent = msg;
+          if (!res.ok) {
+            let msg = "Error de autenticación";
+            try {
+              const data: any = await res.json();
+              if (data && data.error) msg = data.error;
+            } catch {
+              try {
+                msg = await res.text();
+              } catch {}
+            }
+            errorBox.textContent = msg;
+            errorBox.hidden = false;
+            password.classList.add("input-error");
+
+            // Reset button
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+            return;
+          }
+          window.location.href = "/admin";
+        } catch (e) {
+          // Reset button on network error
+          submitBtn.disabled = false;
+          submitBtn.textContent = originalText;
+          errorBox.textContent = "Error de conexión";
           errorBox.hidden = false;
-          password.classList.add('input-error');
-          return;
         }
-        window.location.href = '/admin';
       });
     </script>
   </body>
-  </html>
-
+</html>
