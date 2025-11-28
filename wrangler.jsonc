@@ -5,6 +5,7 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "leautomate-astro-template",
+	"account_id": "ec768f131e040905812444dde627f66b",
 	"main": "./dist/_worker.js/index.js",
 	"compatibility_date": "2025-11-18",
 	"compatibility_flags": [
@@ -21,7 +22,7 @@
 	"kv_namespaces": [
 		{
 			"binding": "KV_ASTRO",
-			"id": "44f606ee09754628a3a360ee8c9ec8f5",
+			"id": "6d98a60473e9483cb0e14f79721674f3",
 			"remote": true
 		}
 	]
