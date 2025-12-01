@@ -1,8 +1,8 @@
 import type { Page } from "../types/clientWebsite";
+import { kvHelper } from "./kvHelper";
 
-// Este código se ejecuta SOLO en build time
+// Este código se ejecuta en build time (SSG) o runtime (SSR)
 export async function getPageContent({ locals, params }: { locals: App.Locals; params: { path: string } }): Promise<Page> {
-  const { KV_ASTRO } = locals.runtime.env;
-  const value = await (KV_ASTRO as KVNamespace).get(`page:${params.path}`, 'json');
+  const value = await kvHelper.get<Page>(locals, `page:${params.path}`);
   return value as Page;
 }
