@@ -11,6 +11,8 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
   const [pages, setPages] = useState<Page[]>(initialPages);
   const [selectedSlug, setSelectedSlug] = useState<string>(() => (initialPages[0]?.slug || "/"));
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedSlotEl, setSelectedSlotEl] = useState<HTMLElement | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
   const [buildStatus, setBuildStatus] = useState<string>("");
   const [showExitModal, setShowExitModal] = useState(false);
@@ -75,10 +77,19 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
     const idx = selectedIndex ?? -1;
     const comps = Array.isArray(currentPage?.components) ? currentPage.components : [];
     const comp = comps[idx] || null;
-    const attrs = (comp?.custom_attrs || {}) as Record<string, any>;
+    let attrs: Record<string, any> = {};
+    if (comp) {
+      if (selectedSlot) {
+        const slotObj = ((comp.custom_attrs || {}) as Record<string, any>)[selectedSlot] || null;
+        const nestedComp = slotObj && typeof slotObj === "object" ? (slotObj.value as any) : null;
+        attrs = (nestedComp?.custom_attrs || {}) as Record<string, any>;
+      } else {
+        attrs = (comp?.custom_attrs || {}) as Record<string, any>;
+      }
+    }
     const entries = Object.entries(attrs).filter(([_, v]) => v && typeof v === "object" && (v.type === "string" || v.type === "text"));
     return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
-  }, [currentPage, selectedIndex]);
+  }, [currentPage, selectedIndex, selectedSlot]);
 
   const onEditAttr = (name: string, value: string) => {
     const next = pages.map((p) => {
@@ -88,10 +99,22 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
       const i = textAttrs.compIndex;
       if (i >= 0 && comps[i]) {
         const ca = { ...(comps[i].custom_attrs || {}) } as any;
-        const ov = ca[name] || { type: "string", value: "" };
-        ca[name] = { ...ov, value };
-        comps[i] = { ...comps[i], custom_attrs: ca };
-        copy.components = comps as any;
+        if (selectedSlot) {
+          const slotEntry = ca[selectedSlot] || { type: "component", value: null };
+          const nestedComp = { ...(slotEntry.value || {}) } as any;
+          const nestedAttrs = { ...(nestedComp.custom_attrs || {}) } as any;
+          const ov = nestedAttrs[name] || { type: "string", value: "" };
+          nestedAttrs[name] = { ...ov, value };
+          nestedComp.custom_attrs = nestedAttrs;
+          ca[selectedSlot] = { ...slotEntry, value: nestedComp };
+          comps[i] = { ...comps[i], custom_attrs: ca };
+          copy.components = comps as any;
+        } else {
+          const ov = ca[name] || { type: "string", value: "" };
+          ca[name] = { ...ov, value };
+          comps[i] = { ...comps[i], custom_attrs: ca };
+          copy.components = comps as any;
+        }
       }
       return copy;
     });
@@ -225,19 +248,45 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
         <main className="admin-preview-area">
           <div className={`preview-wrapper ${previewMode}`}>
             {currentPage && (
-              <div className="preview-content">
+              <div
+                className="preview-content"
+                onClick={(e) => {
+                  const t = e.target as HTMLElement;
+                  const wrap = t.closest('.comp-wrap') as HTMLElement | null;
+                  if (!wrap) return;
+                  const idxStr = wrap.getAttribute('data-top-index');
+                  const idx = idxStr ? Number(idxStr) : NaN;
+                  if (!Number.isNaN(idx)) setSelectedIndex(idx);
+                  const slotEl = t.closest('[data-component-path]') as HTMLElement | null;
+                  if (slotEl) {
+                    const slot = slotEl.getAttribute('data-component-slot');
+                    setSelectedSlot(slot || null);
+                    if (selectedSlotEl && selectedSlotEl !== slotEl) {
+                      selectedSlotEl.classList.remove('selected-sub');
+                    }
+                    slotEl.classList.add('selected-sub');
+                    setSelectedSlotEl(slotEl);
+                  } else {
+                    setSelectedSlot(null);
+                    if (selectedSlotEl) {
+                      selectedSlotEl.classList.remove('selected-sub');
+                      setSelectedSlotEl(null);
+                    }
+                  }
+                }}
+              >
                 <Layout page={currentPage}>
                   <>
                     {(currentPage.components || []).map((component, i) => {
                       const dir = String(component.atomic_hierarchy).endsWith("s") ? String(component.atomic_hierarchy) : `${component.atomic_hierarchy}s`;
                       const componentPath = `${dir}/${component.name}`;
                       const props = flattenProps(component.custom_attrs || {});
-                      const active = selectedIndex === i;
+                      const active = selectedIndex === i && !selectedSlot;
                       return (
                         <div 
                           key={`${component.name}-${i}`} 
                           className={`comp-wrap ${active ? "active" : ""}`} 
-                          onClick={(e) => { e.stopPropagation(); setSelectedIndex(i); }}
+                          data-top-index={i}
                         >
                           <DynamicIsland client:load componentPath={componentPath} props={props} />
                           <div className="comp-label">{component.name}</div>
@@ -316,7 +365,9 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                   ) : (
                     <>
                       <div className="selected-comp-name">
-                        {currentPage?.components?.[selectedIndex]?.name}
+                        {selectedSlot
+                          ? String(((currentPage?.components?.[selectedIndex || 0]?.custom_attrs || {}) as any)[selectedSlot]?.value?.name || currentPage?.components?.[selectedIndex || 0]?.name)
+                          : currentPage?.components?.[selectedIndex || 0]?.name}
                       </div>
                       {textAttrs.entries.length === 0 && <div className="empty-state">Este componente no tiene campos de texto editables.</div>}
                       {textAttrs.entries.map(([k, v]) => (
