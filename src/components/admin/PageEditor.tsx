@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import infoIcon from "@/assets/info.svg";
 import type { Page } from "@/types/clientWebsite";
 import Layout from "@/components/system/Layout.tsx";
 import DynamicIsland from "@/components/system/DynamicIsland";
@@ -27,6 +28,59 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
   const [compOpen, setCompOpen] = useState(true);
 
   const currentPage = useMemo(() => pages.find((p) => p.slug === selectedSlug) || pages[0], [pages, selectedSlug]);
+
+  const metaTitle = (currentPage?.meta_title || currentPage?.title || "");
+  const metaDescription = (currentPage?.meta_description || "");
+  const canonicalUrl = (currentPage?.canonical || "/" + String(currentPage?.slug || ""));
+  const og = (currentPage?.open_graph || {}) as any;
+  const ogImage = (og?.og_image || {}) as any;
+  const twitterCard = (og?.twitter_card || "summary") as string;
+  const [seoSearchOpen, setSeoSearchOpen] = useState(true);
+  const [seoOgOpen, setSeoOgOpen] = useState(true);
+  const [seoTwitterOpen, setSeoTwitterOpen] = useState(true);
+  const hostText = useMemo(() => {
+    try {
+      const u = new URL(og?.og_url || canonicalUrl);
+      return u.hostname;
+    } catch {
+      return (typeof window !== "undefined" ? window.location.hostname : "");
+    }
+  }, [og?.og_url, canonicalUrl]);
+
+  function InfoTip({ text }: { text: string }) {
+    const [open, setOpen] = useState(false);
+    return (
+      <span
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 6 }}
+      >
+        <img src={infoIcon as any} alt="" style={{ width: 14, height: 14, display: 'block', opacity: 0.8 }} />
+        {open && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              marginTop: 6,
+              background: '#ffffff',
+              color: '#111827',
+              border: '1px solid #e5e7eb',
+              borderRadius: 6,
+              padding: '8px 10px',
+              fontSize: 12,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+              whiteSpace: 'normal',
+              zIndex: 1000,
+              maxWidth: 280
+            }}
+          >
+            {text}
+          </div>
+        )}
+      </span>
+    );
+  }
 
   useEffect(() => {
     let timer: any = null;
@@ -58,6 +112,7 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
       if (key === "meta_description") (copy as any).meta_description = value;
       if (key === "canonical") (copy as any).canonical = value;
       if (key === "robots_extra") (copy as any).robots_extra = value;
+      if (key === "keyword_focus") (copy as any).keyword_focus = String(value || "").split(",").map((s) => s.trim()).filter(Boolean);
       if (key === "og_title") {
         const og = { ...(copy.open_graph || {}) } as any;
         og.og_title = value;
@@ -66,6 +121,56 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
       if (key === "og_description") {
         const og = { ...(copy.open_graph || {}) } as any;
         og.og_description = value;
+        copy.open_graph = og as any;
+      }
+      if (key === "og_type") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        og.og_type = value as any;
+        copy.open_graph = og as any;
+      }
+      if (key === "twitter_card") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        og.twitter_card = value as any;
+        copy.open_graph = og as any;
+      }
+      if (key === "og_site_name") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        og.og_site_name = value;
+        copy.open_graph = og as any;
+      }
+      if (key === "og_url") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        og.og_url = value;
+        copy.open_graph = og as any;
+      }
+      if (key === "og_locale") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        og.og_locale = value;
+        copy.open_graph = og as any;
+      }
+      if (key === "twitter_title") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        og.twitter_title = value;
+        copy.open_graph = og as any;
+      }
+      if (key === "twitter_description") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        og.twitter_description = value;
+        copy.open_graph = og as any;
+      }
+      if (key === "twitter_image") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        og.twitter_image = value;
+        copy.open_graph = og as any;
+      }
+      if (key === "og_image.src" || key === "og_image.alt" || key === "og_image.width" || key === "og_image.height") {
+        const og = { ...(copy.open_graph || {}) } as any;
+        const img = { ...(og.og_image || {}) } as any;
+        if (key === "og_image.src") img.src = value;
+        if (key === "og_image.alt") img.alt = value;
+        if (key === "og_image.width") img.width = Number(value || 0);
+        if (key === "og_image.height") img.height = Number(value || 0);
+        og.og_image = img;
         copy.open_graph = og as any;
       }
       return copy;
@@ -275,26 +380,28 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                   }
                 }}
               >
-                <Layout page={currentPage}>
-                  <>
-                    {(currentPage.components || []).map((component, i) => {
-                      const dir = String(component.atomic_hierarchy).endsWith("s") ? String(component.atomic_hierarchy) : `${component.atomic_hierarchy}s`;
-                      const componentPath = `${dir}/${component.name}`;
-                      const props = flattenProps(component.custom_attrs || {});
-                      const active = selectedIndex === i && !selectedSlot;
-                      return (
-                        <div 
-                          key={`${component.name}-${i}`} 
-                          className={`comp-wrap ${active ? "active" : ""}`} 
-                          data-top-index={i}
-                        >
-                          <DynamicIsland client:load componentPath={componentPath} props={props} />
-                          <div className="comp-label">{component.name}</div>
-                        </div>
-                      );
-                    })}
-                  </>
-                </Layout>
+                <div className="preview-sandbox">
+                  <Layout page={currentPage}>
+                    <>
+                      {(currentPage.components || []).map((component, i) => {
+                        const dir = String(component.atomic_hierarchy).endsWith("s") ? String(component.atomic_hierarchy) : `${component.atomic_hierarchy}s`;
+                        const componentPath = `${dir}/${component.name}`;
+                        const props = flattenProps(component.custom_attrs || {});
+                        const active = selectedIndex === i && !selectedSlot;
+                        return (
+                          <div 
+                            key={`${component.name}-${i}`} 
+                            className={`comp-wrap ${active ? "active" : ""}`} 
+                            data-top-index={i}
+                          >
+                            <DynamicIsland client:load componentPath={componentPath} props={props} />
+                            <div className="comp-label">{component.name}</div>
+                          </div>
+                        );
+                      })}
+                    </>
+                  </Layout>
+                </div>
               </div>
             )}
           </div>
@@ -322,22 +429,122 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                 </svg>
               </button>
               {seoOpen && (
-                <div className="accordion-content">
-                  <div className="form-group">
-                    <label>Título</label>
-                    <input value={currentPage?.title || ""} onChange={(e) => onEditSeo("title", e.target.value)} />
+                <div className="accordion-content" style={{ display: 'grid', gap: 16, width: '100%' }}>
+                  <div className="properties-subsection" style={{ marginTop: 20 }}>
+                    <button className="accordion-header" onClick={() => setSeoSearchOpen(!seoSearchOpen)}>
+                      <h4 style={{ textAlign: 'left' }}>Apariencia en resultados de búsqueda</h4>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`chevron ${seoSearchOpen ? 'open' : ''}`}><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    {seoSearchOpen && (
+                      <div className="accordion-content" style={{ display: 'grid', gap: 8, width: '100%' }}>
+                        <div style={{ width: '100%', overflowX: 'auto' }}>
+                          <div style={{ background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 12, boxShadow: '0 1px 2px rgba(0,0,0,0.06)', width: 640, minWidth: 640 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#374151', fontSize: 12, marginBottom: 8, overflowWrap: 'anywhere' }}>
+                            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#e5e7eb' }}></div>
+                            <div style={{ fontWeight: 600 }}>{og?.og_site_name || hostText || 'Sitio'}</div>
+                            <span style={{ color: '#6b7280' }}>·</span>
+                            <div style={{ color: '#6b7280' }}>{hostText}</div>
+                            <span style={{ color: '#6b7280' }}>›</span>
+                            <div style={{ color: '#6b7280' }}>{'homepage'}</div>
+                          </div>
+                          <div style={{ color: '#1a0dab', fontSize: 20, lineHeight: '24px', marginBottom: 6, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{metaTitle || '(Sin título)'}</div>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#6b7280', fontSize: 12, marginBottom: 4, overflowWrap: 'anywhere' }}>
+                            {(currentPage?.published_at) && <div>{new Date(currentPage.published_at).toLocaleDateString(currentPage.language || 'es-ES', { year: 'numeric', month: 'short', day: 'numeric' })}</div>}
+                            <span>–</span>
+                            <div style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{metaDescription || '(Sin descripción)'}</div>
+                          </div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center' }}>{"<< Desliza para ver la previsualización >>"}</div>
+                        <div className="form-group"><label>Descripción general<InfoTip text="Resumen que aparece debajo del título en resultados" /></label><textarea rows={3} value={currentPage?.meta_description || ''} onChange={(e) => onEditSeo('meta_description', e.target.value)} /></div>
+                        <div className="form-group"><label>Título<InfoTip text="Título principal de la página" /></label><input value={currentPage?.title || ''} onChange={(e) => onEditSeo('title', e.target.value)} /></div>
+                        <div className="form-group"><label>Meta Title<InfoTip text="Título que aparece en los resultados de búsqueda" /></label><input value={currentPage?.meta_title || ''} onChange={(e) => onEditSeo('meta_title', e.target.value)} /></div>
+                        <div className="form-group"><label>Canonical<InfoTip text="URL preferida para evitar contenido duplicado" /></label><input value={currentPage?.canonical || ''} onChange={(e) => onEditSeo('canonical', e.target.value)} /></div>
+                        <div className="form-group"><label>Robots Extra<InfoTip text="Directivas adicionales para robots (ej. noarchive)" /></label><input value={currentPage?.robots_extra || ''} onChange={(e) => onEditSeo('robots_extra', e.target.value)} /></div>
+                        <div className="form-group"><label>Keywords<InfoTip text="Lista de palabras clave separadas por comas" /></label><input value={(currentPage?.keyword_focus || []).join(', ')} onChange={(e) => onEditSeo('keyword_focus', e.target.value)} /></div>
+                      </div>
+                    )}
                   </div>
-                  <div className="form-group">
-                    <label>Meta Title</label>
-                    <input value={currentPage?.meta_title || ""} onChange={(e) => onEditSeo("meta_title", e.target.value)} />
+
+                  <div className="properties-subsection" style={{ width: '100%' }}>
+                    <button className="accordion-header" onClick={() => setSeoOgOpen(!seoOgOpen)}>
+                      <h4 style={{ textAlign: 'left' }}>Apariencia en redes sociales (social, general)</h4>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`chevron ${seoOgOpen ? 'open' : ''}`}><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    {seoOgOpen && (
+                      <div className="accordion-content" style={{ display: 'grid', gap: 8, width: '100%' }}>
+                        <div style={{ width: '100%', overflowX: 'auto' }}>
+                          <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, width: 640, minWidth: 640 }}>
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                            {ogImage?.src ? (
+                              <img src={ogImage.src} alt={ogImage.alt || ''} style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 4 }} />
+                            ) : (
+                              <div style={{ width: 120, height: 120, background: '#f3f4f6', borderRadius: 4 }}></div>
+                            )}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 4, overflowWrap: 'anywhere' }}>{og?.og_site_name || '(Sin sitio)'}</div>
+                              <div style={{ color: '#111827', fontSize: 16, fontWeight: 600, marginBottom: 4, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{og?.og_title || metaTitle || '(Sin título)'}</div>
+                              <div style={{ color: '#4b5563', fontSize: 13, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{og?.og_description || metaDescription || '(Sin descripción)'}</div>
+                            </div>
+                          </div>
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center' }}>{"<< Desliza para ver la previsualización >>"}</div>
+                        <div className="form-group"><label>Título para redes<InfoTip text="Título mostrado al compartir en redes" /></label><input value={currentPage?.open_graph?.og_title || ''} onChange={(e) => onEditSeo('og_title', e.target.value)} /></div>
+                        <div className="form-group"><label>Descripción para redes<InfoTip text="Texto que acompaña al título al compartir" /></label><textarea rows={3} value={currentPage?.open_graph?.og_description || ''} onChange={(e) => onEditSeo('og_description', e.target.value)} /></div>
+                        <div className="form-group"><label>Tipo de contenido<InfoTip text="Categoría del contenido para redes" /></label><select value={currentPage?.open_graph?.og_type || 'website'} onChange={(e) => onEditSeo('og_type', e.target.value)} style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff' }}><option value="article">article</option><option value="website">website</option><option value="product">product</option></select></div>
+                        <div className="form-group"><label>Nombre del sitio<InfoTip text="Nombre de tu marca o sitio" /></label><input value={currentPage?.open_graph?.og_site_name || ''} onChange={(e) => onEditSeo('og_site_name', e.target.value)} /></div>
+                        <div className="form-group"><label>URL del recurso<InfoTip text="URL que se compartirá en redes" /></label><input value={currentPage?.open_graph?.og_url || currentPage?.canonical || ''} onChange={(e) => onEditSeo('og_url', e.target.value)} /></div>
+                        <div className="form-group"><label>Idioma/región<InfoTip text="Formato es_ES, en_US" /></label><input value={currentPage?.open_graph?.og_locale || ''} onChange={(e) => onEditSeo('og_locale', e.target.value)} /></div>
+                        <div className="form-group"><label>Imagen<InfoTip text="URL absoluta de la imagen" /></label><input value={currentPage?.open_graph?.og_image?.src || ''} onChange={(e) => onEditSeo('og_image.src', e.target.value)} /></div>
+                        <div className="form-group"><label>Alt de la imagen<InfoTip text="Texto alternativo descriptivo" /></label><input value={currentPage?.open_graph?.og_image?.alt || ''} onChange={(e) => onEditSeo('og_image.alt', e.target.value)} /></div>
+                        <div className="form-group"><label>Ancho imagen<InfoTip text="En píxeles, ej. 1200" /></label><input type="number" value={Number(currentPage?.open_graph?.og_image?.width || 0)} onChange={(e) => onEditSeo('og_image.width', e.target.value)} /></div>
+                        <div className="form-group"><label>Alto imagen<InfoTip text="En píxeles, ej. 630" /></label><input type="number" value={Number(currentPage?.open_graph?.og_image?.height || 0)} onChange={(e) => onEditSeo('og_image.height', e.target.value)} /></div>
+                      </div>
+                    )}
                   </div>
-                  <div className="form-group">
-                    <label>Meta Description</label>
-                    <textarea rows={3} value={currentPage?.meta_description || ""} onChange={(e) => onEditSeo("meta_description", e.target.value)} />
-                  </div>
-                  <div className="form-group">
-                    <label>Canonical</label>
-                    <input value={currentPage?.canonical || ""} onChange={(e) => onEditSeo("canonical", e.target.value)} />
+
+                  <div className="properties-subsection" style={{ width: '100%' }}>
+                    <button className="accordion-header" onClick={() => setSeoTwitterOpen(!seoTwitterOpen)}>
+                      <h4 style={{ textAlign: 'left' }}>Apariencia en redes sociales (twitter)</h4>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`chevron ${seoTwitterOpen ? 'open' : ''}`}><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    {seoTwitterOpen && (
+                      <div className="accordion-content" style={{ display: 'grid', gap: 8, width: '100%' }}>
+                        <div style={{ width: '100%', overflowX: 'auto' }}>
+                          <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, width: 640, minWidth: 640 }}>
+                          {twitterCard === 'summary_large_image' ? (
+                            <div>
+                              {(og?.twitter_image || ogImage?.src) ? (
+                                <img src={(og?.twitter_image || ogImage?.src) as string} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 4, marginBottom: 8, maxWidth: '100%' }} />
+                              ) : (
+                                <div style={{ width: '100%', height: 160, background: '#f3f4f6', borderRadius: 4, marginBottom: 8 }}></div>
+                              )}
+                              <div style={{ color: '#111827', fontSize: 16, fontWeight: 600, marginBottom: 4, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{og?.twitter_title || og?.og_title || metaTitle || '(Sin título)'}</div>
+                              <div style={{ color: '#4b5563', fontSize: 13, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{og?.twitter_description || og?.og_description || metaDescription || '(Sin descripción)'}</div>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: 12 }}>
+                              {(og?.twitter_image || ogImage?.src) ? (
+                                <img src={(og?.twitter_image || ogImage?.src) as string} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 4 }} />
+                              ) : (
+                                <div style={{ width: 80, height: 80, background: '#f3f4f6', borderRadius: 4 }}></div>
+                              )}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ color: '#111827', fontSize: 15, fontWeight: 600, marginBottom: 4, wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{og?.twitter_title || og?.og_title || metaTitle || '(Sin título)'}</div>
+                                <div style={{ color: '#4b5563', fontSize: 13, overflowWrap: 'anywhere', wordBreak: 'break-word' }}>{og?.twitter_description || og?.og_description || metaDescription || '(Sin descripción)'}</div>
+                              </div>
+                            </div>
+                          )}
+                          </div>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center' }}>{"<< Desliza para ver la previsualización >>"}</div>
+                        <div className="form-group"><label>Formato de tarjeta<InfoTip text="Elige resumen o imagen grande" /></label><select value={currentPage?.open_graph?.twitter_card || 'summary'} onChange={(e) => onEditSeo('twitter_card', e.target.value)} style={{ padding: 8, border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff' }}><option value='summary'>summary</option><option value='summary_large_image'>summary_large_image</option></select></div>
+                        <div className="form-group"><label>Título en Twitter<InfoTip text="Título que mostrará Twitter" /></label><input value={currentPage?.open_graph?.twitter_title || ''} onChange={(e) => onEditSeo('twitter_title', e.target.value)} /></div>
+                        <div className="form-group"><label>Descripción en Twitter<InfoTip text="Texto que acompaña al título" /></label><textarea rows={3} value={currentPage?.open_graph?.twitter_description || ''} onChange={(e) => onEditSeo('twitter_description', e.target.value)} /></div>
+                        <div className="form-group"><label>Imagen en Twitter<InfoTip text="URL de la imagen de la tarjeta" /></label><input value={currentPage?.open_graph?.twitter_image || ''} onChange={(e) => onEditSeo('twitter_image', e.target.value)} /></div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

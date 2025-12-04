@@ -5,6 +5,7 @@ import { flattenProps } from "@/utils/flattenProps";
 import { getPageContent } from "@/lib/getPageContent";
 import Layout from "@/components/system/Layout.tsx";
 import DynamicIsland from "@/components/system/DynamicIsland";
+import { getComponentByPath } from "@/utils/getComponentByPath";
 
 // Real
 // const page = getPageContent({
@@ -109,9 +110,11 @@ const items = page.components.map((component) => {
 ---
 
 <Layout page={page}>
-	<>
-		{items.map(({ componentPath, props }) => (
-			<DynamicIsland client:load componentPath={componentPath} props={props} />
-		))}
-	</>
+  <div class="page-sandbox">
+    <>
+      {items.map(async ({ componentPath, props }) => (
+        await getComponentByPath(componentPath as string, props as Record<string, any>)
+      ))}
+    </>
+  </div>
 </Layout>
