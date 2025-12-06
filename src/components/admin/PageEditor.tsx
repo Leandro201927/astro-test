@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import infoIcon from "@/assets/info.svg";
 import type { Page } from "@/types/clientWebsite";
 import Layout from "@/components/system/Layout.tsx";
@@ -7,6 +7,7 @@ import { flattenProps } from "@/utils/flattenProps";
 import "@/styles/admin/page.scss";
 
 type Props = { initialPages: Page[]; canChange: boolean; userEmail?: string };
+// Fixed media URL handling to support KV list items with name property
 
 export default function PageEditor({ initialPages, canChange, userEmail }: Props) {
   const [pages, setPages] = useState<Page[]>(initialPages);
@@ -26,6 +27,7 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
   // Accordion states
   const [seoOpen, setSeoOpen] = useState(true);
   const [compOpen, setCompOpen] = useState(true);
+  const [libraryOpen, setLibraryOpen] = useState(true);
 
   const currentPage = useMemo(() => pages.find((p) => p.slug === selectedSlug) || pages[0], [pages, selectedSlug]);
 
@@ -38,6 +40,18 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
   const [seoSearchOpen, setSeoSearchOpen] = useState(true);
   const [seoOgOpen, setSeoOgOpen] = useState(true);
   const [seoTwitterOpen, setSeoTwitterOpen] = useState(true);
+  
+  // Safely extract OG image src as string (not an object)
+  const ogImageSrc = useMemo(() => {
+    const src = ogImage?.src;
+    return (typeof src === 'string' && src) ? src : '';
+  }, [ogImage]);
+  
+  // Safely extract Twitter image src as string (not an object)
+  const twitterImageSrc = useMemo(() => {
+    const src = og?.twitter_image;
+    return (typeof src === 'string' && src) ? src : '';
+  }, [og]);
   const hostText = useMemo(() => {
     try {
       const u = new URL(og?.og_url || canonicalUrl);
@@ -55,7 +69,7 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
         onMouseLeave={() => setOpen(false)}
         style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 6 }}
       >
-        <img src={infoIcon as any} alt="" style={{ width: 14, height: 14, display: 'block', opacity: 0.8 }} />
+        <img src={typeof infoIcon === 'string' ? infoIcon : (infoIcon as any)?.src || ''} alt="" style={{ width: 14, height: 14, display: 'block', opacity: 0.8 }} />
         {open && (
           <div
             style={{
@@ -102,6 +116,11 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
     }
     return () => { if (timer) clearInterval(timer); };
   }, [saving]);
+
+  useEffect(() => {
+    if (!libraryOpen) return;
+    loadMediaOnce(false);
+  }, [libraryOpen]);
 
   const onEditSeo = (key: string, value: string) => {
     const next = pages.map((p) => {
@@ -196,6 +215,24 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
     return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
   }, [currentPage, selectedIndex, selectedSlot]);
 
+  const mediaAttrs = useMemo(() => {
+    const idx = selectedIndex ?? -1;
+    const comps = Array.isArray(currentPage?.components) ? currentPage.components : [];
+    const comp = comps[idx] || null;
+    let attrs: Record<string, any> = {};
+    if (comp) {
+      if (selectedSlot) {
+        const slotObj = ((comp.custom_attrs || {}) as Record<string, any>)[selectedSlot] || null;
+        const nestedComp = slotObj && typeof slotObj === 'object' ? (slotObj.value as any) : null;
+        attrs = (nestedComp?.custom_attrs || {}) as Record<string, any>;
+      } else {
+        attrs = (comp?.custom_attrs || {}) as Record<string, any>;
+      }
+    }
+    const entries = Object.entries(attrs).filter(([_, v]) => v && typeof v === 'object' && (v.type === 'img' || v.type === 'file'));
+    return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
+  }, [currentPage, selectedIndex, selectedSlot]);
+
   const onEditAttr = (name: string, value: string) => {
     const next = pages.map((p) => {
       if (p.slug !== currentPage.slug) return p as Page;
@@ -224,6 +261,88 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
       return copy;
     });
     setPages(next);
+  };
+
+  const [showGallery, setShowGallery] = useState(false);
+  const [galleryItems, setGalleryItems] = useState<any[]>([]);
+  const [activeMediaAttr, setActiveMediaAttr] = useState<string | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const galleryCacheRef = useRef<{ items: any[]; ts: number } | null>(null);
+  const galleryInFlightRef = useRef<Promise<void> | null>(null);
+  const MEDIA_TTL_MS = 30000;
+
+  // Helper to safely construct media URL
+  const getMediaUrl = (item: any): string => {
+    if (!item) return '';
+    // Prefer direct URL if available (from R2 public URL)
+    if (typeof item.url === 'string' && item.url) {
+      return item.url;
+    }
+    // Fallback to API proxy if key is available
+    if (typeof item.key === 'string' && item.key) {
+      return `/api/admin/media/file?key=${encodeURIComponent(item.key)}`;
+    }
+    // Handle items from KV list that only have 'name' property (format: "media:actual-key")
+    if (typeof item.name === 'string' && item.name) {
+      const key = item.name.replace(/^media:/, '');
+      return `/api/admin/media/file?key=${encodeURIComponent(key)}`;
+    }
+    return '';
+  };
+
+  const loadMediaOnce = async (force?: boolean) => {
+    const now = Date.now();
+    if (!force && galleryCacheRef.current && (now - galleryCacheRef.current.ts) < MEDIA_TTL_MS) {
+      setGalleryItems(galleryCacheRef.current.items);
+      return;
+    }
+    if (galleryInFlightRef.current) {
+      await galleryInFlightRef.current;
+      setGalleryItems(galleryCacheRef.current?.items || []);
+      return;
+    }
+    const p = (async () => {
+      try {
+        const res = await fetch('/api/admin/media/list');
+        if (res.ok) {
+          const data = await res.json();
+          const items = Array.isArray(data.items) ? data.items : [];
+          galleryCacheRef.current = { items, ts: Date.now() };
+          setGalleryItems(items);
+        }
+      } catch {}
+    })();
+    galleryInFlightRef.current = p;
+    try { await p; } finally { galleryInFlightRef.current = null; }
+  };
+
+  useEffect(() => {
+    if (!showGallery) return;
+    loadMediaOnce(false);
+  }, [showGallery]);
+
+  const onUploadSubmit = async () => {
+    if (!uploadFile) return;
+    try {
+      setUploading(true);
+      const fd = new FormData();
+      fd.append('file', uploadFile);
+      const res = await fetch('/api/admin/media/upload', { method: 'POST', body: fd });
+      if (!res.ok) {
+        setUploading(false);
+        return;
+      }
+      await res.json().catch(() => ({}));
+      setShowUpload(false);
+      setUploadFile(null);
+      await loadMediaOnce(true);
+    } catch {
+      setUploading(false);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const onSave = async () => {
@@ -476,8 +595,8 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                         <div style={{ width: '100%', overflowX: 'auto' }}>
                           <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, width: 640, minWidth: 640 }}>
                           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                            {ogImage?.src ? (
-                              <img src={ogImage.src} alt={ogImage.alt || ''} style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 4 }} />
+                            {ogImageSrc ? (
+                              <img src={ogImageSrc} alt={ogImage.alt || ''} style={{ width: 120, height: 120, objectFit: 'cover', borderRadius: 4 }} />
                             ) : (
                               <div style={{ width: 120, height: 120, background: '#f3f4f6', borderRadius: 4 }}></div>
                             )}
@@ -515,8 +634,8 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                           <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, width: 640, minWidth: 640 }}>
                           {twitterCard === 'summary_large_image' ? (
                             <div>
-                              {(og?.twitter_image || ogImage?.src) ? (
-                                <img src={(og?.twitter_image || ogImage?.src) as string} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 4, marginBottom: 8, maxWidth: '100%' }} />
+                              {(twitterImageSrc || ogImageSrc) ? (
+                                <img src={twitterImageSrc || ogImageSrc} alt="" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 4, marginBottom: 8, maxWidth: '100%' }} />
                               ) : (
                                 <div style={{ width: '100%', height: 160, background: '#f3f4f6', borderRadius: 4, marginBottom: 8 }}></div>
                               )}
@@ -525,8 +644,8 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                             </div>
                           ) : (
                             <div style={{ display: 'flex', gap: 12 }}>
-                              {(og?.twitter_image || ogImage?.src) ? (
-                                <img src={(og?.twitter_image || ogImage?.src) as string} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 4 }} />
+                              {(twitterImageSrc || ogImageSrc) ? (
+                                <img src={twitterImageSrc || ogImageSrc} alt="" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 4 }} />
                               ) : (
                                 <div style={{ width: 80, height: 80, background: '#f3f4f6', borderRadius: 4 }}></div>
                               )}
@@ -583,8 +702,72 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                           <input value={String(v?.value || "")} onChange={(e) => onEditAttr(k, e.target.value)} />
                         </div>
                       ))}
+                      {mediaAttrs.entries.length > 0 && (
+                        <div className="form-group">
+                          <label>Medios</label>
+                          {mediaAttrs.entries.map(([k, v]) => (
+                            <div key={k} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                              <input value={String(v?.value || "")} onChange={(e) => onEditAttr(k, e.target.value)} />
+                              <button className="btn-secondary" onClick={() => { setActiveMediaAttr(k); setShowGallery(true); }}>Galería</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </>
                   )}
+                </div>
+              )}
+            </div>
+
+            <div className="properties-section">
+              <button className="accordion-header" onClick={() => setLibraryOpen(!libraryOpen)}>
+                <h4>Biblioteca</h4>
+                <svg 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  strokeWidth="2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round" 
+                  className={`chevron ${libraryOpen ? 'open' : ''}`}
+                >
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              {libraryOpen && (
+                <div className="accordion-content" style={{ display: 'grid', gap: 12, width: '100%' }}>
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button className="btn-secondary" onClick={() => loadMediaOnce(true)}>Refrescar</button>
+                    <button className="btn-primary" onClick={() => setShowUpload(true)}>Subir archivo</button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
+                    {galleryItems.map((it, idx) => {
+                      const fullKey = it?.key || (it?.name ? it.name.replace(/^media:/, '') : it?.url || '');
+                      const name = fullKey.split('/').pop() || fullKey;
+                      const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fullKey);
+                      const ext = name?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+                      return (
+                        <button key={idx} className="media-item" onClick={() => { if (activeMediaAttr) onEditAttr(activeMediaAttr, getMediaUrl(it)); }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+                            {ext && (<span style={{ fontSize: 11, background: '#e5e7eb', color: '#111827', borderRadius: 10, padding: '2px 6px' }}>{ext}</span>)}
+                          </div>
+                          <div className="media-thumb">
+                            {isImage ? (
+                              <img src={getMediaUrl(it)}
+                                   alt={name}
+                                   style={{ width: '100%', height: 128, minHeight: 128, objectFit: 'cover', borderRadius: 6 }} />
+                            ) : (
+                              <div style={{ width: '100%', height: 128, minHeight: 128, background: '#f3f4f6', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', padding: '0 8px' }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+                                {ext && (<span style={{ fontSize: 11, marginLeft: 6, background: '#e5e7eb', color: '#111827', borderRadius: 10, padding: '2px 6px' }}>{ext}</span>)}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
@@ -605,6 +788,50 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
           </div>
         </div>
       )}
+      {showGallery && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: 800 }}>
+            <h3>Biblioteca de medios</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12, margin: '12px 0' }}>
+              {galleryItems.map((it, idx) => {
+                const fullKey = it?.key || (it?.name ? it.name.replace(/^media:/, '') : it?.url || '');
+                const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fullKey);
+                return (
+                  <button key={idx} className="media-item" onClick={() => { if (activeMediaAttr) onEditAttr(activeMediaAttr, getMediaUrl(it)); setShowGallery(false); }}>
+                    <div className="media-thumb">
+                      {isImage ? (
+                        <img src={getMediaUrl(it)}
+                             alt={it.key || fullKey}
+                             style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 6 }} />
+                      ) : (
+                        <div style={{ width: '100%', height: 120, background: '#f3f4f6', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>Archivo</div>
+                      )}
+                    </div>
+                    <div className="media-label" style={{ fontSize: 12, marginTop: 6, overflowWrap: 'anywhere' }}>{it.key || fullKey}</div>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => setShowGallery(false)}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showUpload && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: 520 }}>
+            <h3>Subir archivo</h3>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+            </div>
+            <div className="modal-actions">
+              <button className="btn-secondary" onClick={() => { if (!uploading) setShowUpload(false); }}>Cancelar</button>
+              <button className="btn-primary" disabled={uploading || !uploadFile} onClick={onUploadSubmit}>{uploading ? 'Subiendo...' : 'Subir'}</button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

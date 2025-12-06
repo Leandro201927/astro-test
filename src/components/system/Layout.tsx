@@ -9,6 +9,10 @@ export default function Layout({ page, children }: { page: Page, children: JSX.E
   const og = page.open_graph || {};
   const ogImage = og.og_image || {};
   const ogUrl = og.og_url || canonical || undefined;
+  
+  // Safely extract image URLs as strings (not objects)
+  const ogImageSrc = (typeof ogImage.src === 'string' && ogImage.src) ? ogImage.src : '';
+  const twitterImageSrc = (typeof og.twitter_image === 'string' && og.twitter_image) ? og.twitter_image : '';
 
   const alternates = page.hreflang_alternates || [];
 
@@ -32,7 +36,7 @@ export default function Layout({ page, children }: { page: Page, children: JSX.E
       {og.og_site_name && <meta property="og:site_name" content={og.og_site_name} />}
       {ogUrl && <meta property="og:url" content={ogUrl} />}
       {og.og_locale && <meta property="og:locale" content={og.og_locale} />}
-      {ogImage.src && <meta property="og:image" content={ogImage.src} />}
+      {ogImageSrc && <meta property="og:image" content={ogImageSrc} />}
       {typeof ogImage.width === 'number' && ogImage.width > 0 && (
         <meta property="og:image:width" content={String(ogImage.width)} />
       )}
@@ -42,7 +46,7 @@ export default function Layout({ page, children }: { page: Page, children: JSX.E
       <meta name="twitter:card" content={og.twitter_card || "summary"} />
       <meta name="twitter:title" content={og.twitter_title || og.og_title || metaTitle} />
       <meta name="twitter:description" content={og.twitter_description || og.og_description || metaDescription} />
-      {(og.twitter_image || ogImage.src) && <meta name="twitter:image" content={(og.twitter_image || ogImage.src) as string} />}
+      {(twitterImageSrc || ogImageSrc) && <meta name="twitter:image" content={twitterImageSrc || ogImageSrc} />}
       {Object.keys(page.schema_org || {}).length > 0 && (
         <script type="application/ld+json">
           {JSON.stringify(page.schema_org)}
