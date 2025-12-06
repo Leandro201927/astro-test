@@ -735,39 +735,196 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                 </svg>
               </button>
               {libraryOpen && (
-                <div className="accordion-content" style={{ display: 'grid', gap: 12, width: '100%' }}>
+                <div className="accordion-content" style={{ display: 'grid', gap: 16, width: '100%' }}>
                   <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button className="btn-secondary" onClick={() => loadMediaOnce(true)}>Refrescar</button>
-                    <button className="btn-primary" onClick={() => setShowUpload(true)}>Subir archivo</button>
+                    <button className="btn-secondary" onClick={() => loadMediaOnce(true)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d=" M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                      </svg>
+                      Refrescar
+                    </button>
+                    <button className="btn-primary" onClick={() => setShowUpload(true)}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                      </svg>
+                      Subir archivo
+                    </button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 }}>
-                    {galleryItems.map((it, idx) => {
-                      const fullKey = it?.key || (it?.name ? it.name.replace(/^media:/, '') : it?.url || '');
-                      const name = fullKey.split('/').pop() || fullKey;
-                      const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fullKey);
-                      const ext = name?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
-                      return (
-                        <button key={idx} className="media-item" onClick={() => { if (activeMediaAttr) onEditAttr(activeMediaAttr, getMediaUrl(it)); }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                            <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
-                            {ext && (<span style={{ fontSize: 11, background: '#e5e7eb', color: '#111827', borderRadius: 10, padding: '2px 6px' }}>{ext}</span>)}
-                          </div>
-                          <div className="media-thumb">
-                            {isImage ? (
-                              <img src={getMediaUrl(it)}
-                                   alt={name}
-                                   style={{ width: '100%', height: 128, minHeight: 128, objectFit: 'cover', borderRadius: 6 }} />
-                            ) : (
-                              <div style={{ width: '100%', height: 128, minHeight: 128, background: '#f3f4f6', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#374151', padding: '0 8px' }}>
-                                <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
-                                {ext && (<span style={{ fontSize: 11, marginLeft: 6, background: '#e5e7eb', color: '#111827', borderRadius: 10, padding: '2px 6px' }}>{ext}</span>)}
+                  
+                  {galleryItems.length === 0 ? (
+                    <div style={{ 
+                      padding: '48px 24px', 
+                      textAlign: 'center', 
+                      background: '#f9fafb', 
+                      borderRadius: 12,
+                      border: '2px dashed #e5e7eb'
+                    }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ 
+                        width: 48, 
+                        height: 48, 
+                        margin: '0 auto 16px',
+                        color: '#9ca3af'
+                      }}>
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                      <p style={{ color: '#6b7280', fontSize: 14, margin: 0 }}>No hay archivos en la biblioteca</p>
+                      <p style={{ color: '#9ca3af', fontSize: 12, margin: '4px 0 0' }}>Sube tu primer archivo para comenzar</p>
+                    </div>
+                  ) : (
+                    <div style={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', 
+                      gap: 16 
+                    }}>
+                      {galleryItems.map((it, idx) => {
+                        const fullKey = it?.key || (it?.name ? it.name.replace(/^media:/, '') : it?.url || '');
+                        const name = fullKey.split('/').pop() || fullKey;
+                        const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(fullKey);
+                        const ext = name?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+                        const fileSize = it?.size ? `${(it.size / 1024).toFixed(1)} KB` : null;
+                        
+                        return (
+                          <button 
+                            key={idx} 
+                            className="media-item"
+                            onClick={() => { if (activeMediaAttr) onEditAttr(activeMediaAttr, getMediaUrl(it)); }}
+                            style={{
+                              background: '#ffffff',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: 12,
+                              padding: 0,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              overflow: 'hidden',
+                              position: 'relative'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateY(-4px)';
+                              e.currentTarget.style.boxShadow = '0 12px 24px rgba(0, 0, 0, 0.12)';
+                              e.currentTarget.style.borderColor = '#3b82f6';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.boxShadow = 'none';
+                              e.currentTarget.style.borderColor = '#e5e7eb';
+                            }}
+                          >
+                            {/* Thumbnail */}
+                            <div style={{ 
+                              width: '100%', 
+                              height: 140, 
+                              background: '#f3f4f6',
+                              position: 'relative',
+                              overflow: 'hidden'
+                            }}>
+                              {isImage ? (
+                                <img 
+                                  src={getMediaUrl(it)}
+                                  alt={name}
+                                  loading="lazy"
+                                  style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    objectFit: 'cover',
+                                    transition: 'transform 0.3s ease'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    (e.target as HTMLImageElement).style.transform = 'scale(1.1)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    (e.target as HTMLImageElement).style.transform = 'scale(1)';
+                                  }}
+                                />
+                              ) : (
+                                <div style={{ 
+                                  width: '100%', 
+                                  height: '100%',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: 8
+                                }}>
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ 
+                                    width: 40, 
+                                    height: 40,
+                                    color: '#9ca3af'
+                                  }}>
+                                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                                    <polyline points="13 2 13 9 20 9"/>
+                                  </svg>
+                                  {ext && (
+                                    <span style={{ 
+                                      fontSize: 11, 
+                                      fontWeight: 600,
+                                      background: '#e5e7eb', 
+                                      color: '#374151', 
+                                      borderRadius: 6, 
+                                      padding: '4px 8px',
+                                      textTransform: 'uppercase'
+                                    }}>
+                                      {ext}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* File Info */}
+                            <div style={{ 
+                              padding: 12,
+                              textAlign: 'left'
+                            }}>
+                              <p style={{ 
+                                fontSize: 13, 
+                                fontWeight: 600,
+                                color: '#111827',
+                                margin: '0 0 4px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                lineHeight: 1.4
+                              }}>
+                                {name.length > 20 ? name.substring(0, 20) + '...' : name}
+                              </p>
+                              
+                              <div style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 6,
+                                flexWrap: 'wrap'
+                              }}>
+                                {ext && (
+                                  <span style={{ 
+                                    fontSize: 10, 
+                                    fontWeight: 500,
+                                    background: '#f3f4f6', 
+                                    color: '#6b7280', 
+                                    borderRadius: 4, 
+                                    padding: '2px 6px',
+                                    textTransform: 'uppercase'
+                                  }}>
+                                    {ext}
+                                  </span>
+                                )}
+                                {fileSize && (
+                                  <span style={{ 
+                                    fontSize: 10, 
+                                    color: '#9ca3af',
+                                    fontWeight: 500
+                                  }}>
+                                    {fileSize}
+                                  </span>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
