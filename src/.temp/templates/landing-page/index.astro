@@ -6,6 +6,7 @@ import { getPageContent } from "@/lib/getPageContent";
 import Layout from "@/components/system/Layout.tsx";
 import DynamicIsland from "@/components/system/DynamicIsland";
 import { getComponentByPath } from "@/utils/getComponentByPath";
+import globalComponents from "@/data/global.json";
 
 // Real
 // const page = getPageContent({
@@ -112,9 +113,23 @@ const items = page.components.map((component) => {
 <Layout page={page}>
   <div class="page-sandbox">
     <>
+      {/* Global Header */}
+      {globalComponents?.header && (
+        await getComponentByPath(
+          `${(globalComponents.header as any).atomic_hierarchy}s/${(globalComponents.header as any).name}`,
+          flattenProps(((globalComponents.header as any).custom_attrs || {}) as Record<string, any>)
+        )
+      )}
       {items.map(async ({ componentPath, props }) => (
         await getComponentByPath(componentPath as string, props as Record<string, any>)
       ))}
+      {/* Global Footer */}
+      {globalComponents?.footer && (
+        await getComponentByPath(
+          `${(globalComponents.footer as any).atomic_hierarchy}s/${(globalComponents.footer as any).name}`,
+          flattenProps(((globalComponents.footer as any).custom_attrs || {}) as Record<string, any>)
+        )
+      )}
     </>
   </div>
 </Layout>
