@@ -5,196 +5,68 @@ import Layout from "@/components/system/Layout.tsx";
 import DynamicIsland from "@/components/system/DynamicIsland";
 import { flattenProps } from "@/utils/flattenProps";
 import "@/styles/admin/page.scss";
+interface Props {
+  initialPages: Page[];
+  initialUser: any;
+  globalComponents?: any;
+}
 
-type Props = { initialPages: Page[]; canChange: boolean; userEmail?: string };
-// Fixed media URL handling to support KV list items with name property
-
-export default function PageEditor({ initialPages, canChange, userEmail }: Props) {
+export default function PageEditor({ initialPages, initialUser, globalComponents }: Props) {
   const [pages, setPages] = useState<Page[]>(initialPages);
-  const [selectedSlug, setSelectedSlug] = useState<string>(() => (initialPages[0]?.slug || "/"));
+  const [currentPageIndex, setCurrentPageIndex] = useState(0);
+  const currentPage = pages[currentPageIndex] || pages[0];
+
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [selectedSlotEl, setSelectedSlotEl] = useState<HTMLElement | null>(null);
-  const [saving, setSaving] = useState<boolean>(false);
-  const [buildStatus, setBuildStatus] = useState<string>("");
-  const [showExitModal, setShowExitModal] = useState(false);
+  
+  const [globalComps, setGlobalComps] = useState(globalComponents || { header: null, footer: null });
+  const [selectedGlobal, setSelectedGlobal] = useState<'header' | 'footer' | null>(null);
 
-  // View controls
-  const [previewMode, setPreviewMode] = useState<"mobile" | "tablet" | "desktop">("desktop");
+  const [saving, setSaving] = useState(false);
+  const [buildStatus, setBuildStatus] = useState<string | null>(null);
+  const [showExitModal, setShowExitModal] = useState(false);
+  const canChange = true;
+
+  const [previewMode, setPreviewMode] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(true);
-
-  // Accordion states
-  const [seoOpen, setSeoOpen] = useState(true);
+  const [seoOpen, setSeoOpen] = useState(false);
+  const [seoSearchOpen, setSeoSearchOpen] = useState(false);
+  const [seoOgOpen, setSeoOgOpen] = useState(false);
+  const [seoTwitterOpen, setSeoTwitterOpen] = useState(false);
   const [compOpen, setCompOpen] = useState(true);
-  const [libraryOpen, setLibraryOpen] = useState(true);
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
-  const currentPage = useMemo(() => pages.find((p) => p.slug === selectedSlug) || pages[0], [pages, selectedSlug]);
+  // Helper values
+  const hostText = typeof window !== 'undefined' ? window.location.host : 'localhost';
+  const og = currentPage?.open_graph || {};
+  const metaTitle = currentPage?.open_graph?.og_title || currentPage?.title || '';
+  const metaDescription = currentPage?.open_graph?.og_description || currentPage?.content_text_summary || '';
+  const ogImageSrc = currentPage?.open_graph?.og_image?.src || '';
+  const ogImage = currentPage?.open_graph?.og_image || {};
+  const twitterImageSrc = currentPage?.open_graph?.twitter_image || '';
+  const twitterCard = currentPage?.open_graph?.twitter_card || 'summary_large_image';
 
-  const metaTitle = (currentPage?.meta_title || currentPage?.title || "");
-  const metaDescription = (currentPage?.meta_description || "");
-  const canonicalUrl = (currentPage?.canonical || "/" + String(currentPage?.slug || ""));
-  const og = (currentPage?.open_graph || {}) as any;
-  const ogImage = (og?.og_image || {}) as any;
-  const twitterCard = (og?.twitter_card || "summary") as string;
-  const [seoSearchOpen, setSeoSearchOpen] = useState(true);
-  const [seoOgOpen, setSeoOgOpen] = useState(true);
-  const [seoTwitterOpen, setSeoTwitterOpen] = useState(true);
-  
-  // Safely extract OG image src as string (not an object)
-  const ogImageSrc = useMemo(() => {
-    const src = ogImage?.src;
-    return (typeof src === 'string' && src) ? src : '';
-  }, [ogImage]);
-  
-  // Safely extract Twitter image src as string (not an object)
-  const twitterImageSrc = useMemo(() => {
-    const src = og?.twitter_image;
-    return (typeof src === 'string' && src) ? src : '';
-  }, [og]);
-  const hostText = useMemo(() => {
-    try {
-      const u = new URL(og?.og_url || canonicalUrl);
-      return u.hostname;
-    } catch {
-      return (typeof window !== "undefined" ? window.location.hostname : "");
-    }
-  }, [og?.og_url, canonicalUrl]);
+  // Helper functions
+  const InfoTip = ({ text }: { text: string }) => (
+    <div className="info-tip" title={text} style={{ display: 'inline-block', marginLeft: 4 }}>
+      <img src={typeof infoIcon === 'string' ? infoIcon : (infoIcon as any).src} alt="Info" style={{ width: 12, height: 12, opacity: 0.5, verticalAlign: 'middle' }} />
+    </div>
+  );
 
-  function InfoTip({ text }: { text: string }) {
-    const [open, setOpen] = useState(false);
-    return (
-      <span
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', marginLeft: 6 }}
-      >
-        <img src={typeof infoIcon === 'string' ? infoIcon : (infoIcon as any)?.src || ''} alt="" style={{ width: 14, height: 14, display: 'block', opacity: 0.8 }} />
-        {open && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              marginTop: 6,
-              background: '#ffffff',
-              color: '#111827',
-              border: '1px solid #e5e7eb',
-              borderRadius: 6,
-              padding: '8px 10px',
-              fontSize: 12,
-              boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-              whiteSpace: 'normal',
-              zIndex: 1000,
-              maxWidth: 280
-            }}
-          >
-            {text}
-          </div>
-        )}
-      </span>
-    );
-  }
-
-  useEffect(() => {
-    let timer: any = null;
-    if (saving) {
-      timer = setInterval(async () => {
-        try {
-          const res = await fetch("/api/admin/pages/build-status");
-          if (res.ok) {
-            const data = await res.json();
-            const st = String(data?.status || "");
-            setBuildStatus(st);
-            if (["SUCCESS", "FAILURE"].includes(st)) {
-              setSaving(false);
-              clearInterval(timer);
-            }
+  const onEditSeo = (field: string, value: string) => {
+       const next = pages.map((p) => {
+          if (p.slug !== currentPage.slug) return p;
+          const copy = { ...p };
+          if (field === 'keyword_focus') {
+             copy.keyword_focus = value.split(',').map(s => s.trim());
+          } else {
+             (copy as any)[field] = value;
           }
-        } catch {}
-      }, 2000);
-    }
-    return () => { if (timer) clearInterval(timer); };
-  }, [saving]);
-
-  useEffect(() => {
-    if (!libraryOpen) return;
-    loadMediaOnce(false);
-  }, [libraryOpen]);
-
-  const onEditSeo = (key: string, value: string) => {
-    const next = pages.map((p) => {
-      if (p.slug !== currentPage.slug) return p as Page;
-      const copy = { ...p } as Page;
-      if (key === "title") (copy as any).title = value;
-      if (key === "meta_title") (copy as any).meta_title = value;
-      if (key === "meta_description") (copy as any).meta_description = value;
-      if (key === "canonical") (copy as any).canonical = value;
-      if (key === "robots_extra") (copy as any).robots_extra = value;
-      if (key === "keyword_focus") (copy as any).keyword_focus = String(value || "").split(",").map((s) => s.trim()).filter(Boolean);
-      if (key === "og_title") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.og_title = value;
-        copy.open_graph = og as any;
-      }
-      if (key === "og_description") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.og_description = value;
-        copy.open_graph = og as any;
-      }
-      if (key === "og_type") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.og_type = value as any;
-        copy.open_graph = og as any;
-      }
-      if (key === "twitter_card") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.twitter_card = value as any;
-        copy.open_graph = og as any;
-      }
-      if (key === "og_site_name") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.og_site_name = value;
-        copy.open_graph = og as any;
-      }
-      if (key === "og_url") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.og_url = value;
-        copy.open_graph = og as any;
-      }
-      if (key === "og_locale") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.og_locale = value;
-        copy.open_graph = og as any;
-      }
-      if (key === "twitter_title") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.twitter_title = value;
-        copy.open_graph = og as any;
-      }
-      if (key === "twitter_description") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.twitter_description = value;
-        copy.open_graph = og as any;
-      }
-      if (key === "twitter_image") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        og.twitter_image = value;
-        copy.open_graph = og as any;
-      }
-      if (key === "og_image.src" || key === "og_image.alt" || key === "og_image.width" || key === "og_image.height") {
-        const og = { ...(copy.open_graph || {}) } as any;
-        const img = { ...(og.og_image || {}) } as any;
-        if (key === "og_image.src") img.src = value;
-        if (key === "og_image.alt") img.alt = value;
-        if (key === "og_image.width") img.width = Number(value || 0);
-        if (key === "og_image.height") img.height = Number(value || 0);
-        og.og_image = img;
-        copy.open_graph = og as any;
-      }
-      return copy;
-    });
-    setPages(next);
+          return copy;
+       });
+       setPages(next);
   };
 
   const textAttrs = useMemo(() => {
@@ -210,6 +82,9 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
       } else {
         attrs = (comp?.custom_attrs || {}) as Record<string, any>;
       }
+    } else if (selectedGlobal && globalComps[selectedGlobal]) {
+      const g = globalComps[selectedGlobal];
+      attrs = (g?.custom_attrs || {}) as Record<string, any>;
     }
     const entries = Object.entries(attrs).filter(([_, v]) => v && typeof v === "object" && (v.type === "string" || v.type === "text"));
     return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
@@ -228,12 +103,26 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
       } else {
         attrs = (comp?.custom_attrs || {}) as Record<string, any>;
       }
+    } else if (selectedGlobal && globalComps[selectedGlobal]) {
+      const g = globalComps[selectedGlobal];
+      attrs = (g?.custom_attrs || {}) as Record<string, any>;
     }
     const entries = Object.entries(attrs).filter(([_, v]) => v && typeof v === 'object' && (v.type === 'img' || v.type === 'file'));
     return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
   }, [currentPage, selectedIndex, selectedSlot]);
 
   const onEditAttr = (name: string, value: string) => {
+    if (selectedGlobal) {
+      const g = globalComps[selectedGlobal];
+      if (!g) return;
+      const ca = { ...(g.custom_attrs || {}) } as any;
+      const ov = ca[name] || { type: "string", value: "" };
+      ca[name] = { ...ov, value };
+      const nextG = { ...g, custom_attrs: ca };
+      setGlobalComps({ ...globalComps, [selectedGlobal]: nextG });
+      return;
+    }
+
     const next = pages.map((p) => {
       if (p.slug !== currentPage.slug) return p as Page;
       const copy = { ...p } as Page;
@@ -350,7 +239,7 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
     try {
       setSaving(true);
       setBuildStatus("QUEUED");
-      const res = await fetch("/api/admin/pages/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pages }) });
+      const res = await fetch("/api/admin/pages/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pages, global_components: globalComps }) });
       if (!res.ok) {
         setSaving(false);
         return;
@@ -452,8 +341,13 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
               {pages.map((p) => (
                 <button 
                   key={p.slug} 
-                  className={`page-item ${p.slug === selectedSlug ? "active" : ""}`} 
-                  onClick={() => { setSelectedSlug(p.slug); setSelectedIndex(null); }}
+                  className={`page-item ${p.slug === currentPage.slug ? "active" : ""}`} 
+                  onClick={() => { 
+                    const idx = pages.findIndex(x => x.slug === p.slug);
+                    setCurrentPageIndex(idx === -1 ? 0 : idx); 
+                    setSelectedIndex(null); 
+                    setSelectedGlobal(null);
+                  }}
                 >
                   <span className="page-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
@@ -464,6 +358,36 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                   </div>
                 </button>
               ))}
+            </div>
+
+            <div className="sidebar-header" style={{ marginTop: 24, paddingLeft: 0 }}>
+              <h3>Globales</h3>
+            </div>
+            <div className="pages-list">
+              <button 
+                className={`page-item ${selectedGlobal === 'header' ? "active" : ""}`}
+                onClick={() => { setSelectedGlobal('header'); setSelectedIndex(null); }}
+              >
+                 <span className="page-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/></svg>
+                  </span>
+                  <div className="page-info">
+                    <span className="page-title">Header</span>
+                    <span className="page-slug">{globalComps.header?.name || "Sin componente"}</span>
+                  </div>
+              </button>
+              <button 
+                className={`page-item ${selectedGlobal === 'footer' ? "active" : ""}`}
+                onClick={() => { setSelectedGlobal('footer'); setSelectedIndex(null); }}
+              >
+                 <span className="page-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
+                  </span>
+                  <div className="page-info">
+                    <span className="page-title">Footer</span>
+                    <span className="page-slug">{globalComps.footer?.name || "Sin componente"}</span>
+                  </div>
+              </button>
             </div>
           </div>
         </aside>
@@ -479,8 +403,21 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                   const wrap = t.closest('.comp-wrap') as HTMLElement | null;
                   if (!wrap) return;
                   const idxStr = wrap.getAttribute('data-top-index');
-                  const idx = idxStr ? Number(idxStr) : NaN;
-                  if (!Number.isNaN(idx)) setSelectedIndex(idx);
+                  
+                  if (idxStr === 'global_header') {
+                    setSelectedGlobal('header');
+                    setSelectedIndex(null);
+                  } else if (idxStr === 'global_footer') {
+                    setSelectedGlobal('footer');
+                    setSelectedIndex(null);
+                  } else {
+                    const idx = idxStr ? Number(idxStr) : NaN;
+                    if (!Number.isNaN(idx)) {
+                       setSelectedIndex(idx);
+                       setSelectedGlobal(null);
+                    }
+                  }
+
                   const slotEl = t.closest('[data-component-path]') as HTMLElement | null;
                   if (slotEl) {
                     const slot = slotEl.getAttribute('data-component-slot');
@@ -502,22 +439,46 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
                 <div className="preview-sandbox">
                   <Layout page={currentPage}>
                     <>
-                      {(currentPage.components || []).map((component, i) => {
-                        const dir = String(component.atomic_hierarchy).endsWith("s") ? String(component.atomic_hierarchy) : `${component.atomic_hierarchy}s`;
-                        const componentPath = `${dir}/${component.name}`;
-                        const props = flattenProps(component.custom_attrs || {});
-                        const active = selectedIndex === i && !selectedSlot;
-                        return (
-                          <div 
-                            key={`${component.name}-${i}`} 
-                            className={`comp-wrap ${active ? "active" : ""}`} 
-                            data-top-index={i}
-                          >
-                            <DynamicIsland client:load componentPath={componentPath} props={props} />
-                            <div className="comp-label">{component.name}</div>
-                          </div>
-                        );
-                      })}
+                      {/* Global Header */}
+                      {globalComps?.header && (
+                         <div 
+                           className={`comp-wrap ${selectedGlobal === 'header' ? "active" : ""}`} 
+                           data-top-index="global_header"
+                           style={{ marginBottom: '1rem' }}
+                         >
+                           <DynamicIsland componentPath={`${globalComps.header.atomic_hierarchy}s/${globalComps.header.name}`} props={flattenProps(globalComps.header.custom_attrs || {})} />
+                         </div>
+                      )}
+
+                      <div className="page-content-wrapper" style={{ minHeight: '50vh' }}>
+                        {Array.isArray(currentPage.components) && currentPage.components.map((component, i) => {
+                          const dir = String(component.atomic_hierarchy).endsWith("s") ? String(component.atomic_hierarchy) : `${component.atomic_hierarchy}s`;
+                          const componentPath = `${dir}/${component.name}`;
+                          const props = flattenProps(component.custom_attrs || {});
+                          const active = selectedIndex === i && !selectedSlot;
+                          return (
+                            <div 
+                              key={`${component.name}-${i}`} 
+                              className={`comp-wrap ${active ? "active" : ""}`} 
+                              data-top-index={i}
+                            >
+                              <DynamicIsland componentPath={componentPath} props={props} />
+                              <div className="comp-label">{component.name}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Global Footer */}
+                      {globalComps?.footer && (
+                         <div 
+                           className={`comp-wrap ${selectedGlobal === 'footer' ? "active" : ""}`} 
+                           data-top-index="global_footer"
+                           style={{ marginTop: '1rem' }}
+                         >
+                           <DynamicIsland componentPath={`${globalComps.footer.atomic_hierarchy}s/${globalComps.footer.name}`} props={flattenProps(globalComps.footer.custom_attrs || {})} />
+                         </div>
+                      )}
                     </>
                   </Layout>
                 </div>
@@ -686,14 +647,17 @@ export default function PageEditor({ initialPages, canChange, userEmail }: Props
               </button>
               {compOpen && (
                 <div className="accordion-content">
-                  {selectedIndex === null ? (
+                  {selectedIndex === null && selectedGlobal === null ? (
                     <div className="empty-state">Selecciona un componente en el preview para editar sus propiedades.</div>
                   ) : (
                     <>
                       <div className="selected-comp-name">
-                        {selectedSlot
-                          ? String(((currentPage?.components?.[selectedIndex || 0]?.custom_attrs || {}) as any)[selectedSlot]?.value?.name || currentPage?.components?.[selectedIndex || 0]?.name)
-                          : currentPage?.components?.[selectedIndex || 0]?.name}
+                        {selectedGlobal 
+                            ? (globalComps[selectedGlobal]?.name + " (Global)")
+                            : (selectedSlot
+                                ? String(((currentPage?.components?.[selectedIndex || 0]?.custom_attrs || {}) as any)[selectedSlot]?.value?.name || currentPage?.components?.[selectedIndex || 0]?.name)
+                                : currentPage?.components?.[selectedIndex || 0]?.name)
+                        }
                       </div>
                       {textAttrs.entries.length === 0 && <div className="empty-state">Este componente no tiene campos de texto editables.</div>}
                       {textAttrs.entries.map(([k, v]) => (

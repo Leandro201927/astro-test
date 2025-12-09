@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import type { Page } from "@/types/clientWebsite";
-import { putPages } from "@/lib/kvPages";
+import { putPages, putGlobalComponents } from "@/lib/kvPages";
 import { triggerPagesBuild } from "@/lib/cloudflarePages";
 
 export const prerender = false;
@@ -15,11 +15,16 @@ export const POST: APIRoute = async ({ request, cookies, locals }) => {
   try {
     payload = await request.json();
   } catch {}
+  
   const pages: Page[] = Array.isArray(payload?.pages) ? payload.pages : [];
-  if (!pages.length) {
-    return new Response(JSON.stringify({ error: "No pages" }), { status: 400, headers: { "Content-Type": "application/json" } });
+  if (pages.length) {
+    await putPages(locals as App.Locals, pages);
   }
-  await putPages(locals as App.Locals, pages);
+  
+  if (payload?.global_components) {
+    await putGlobalComponents(locals as App.Locals, payload.global_components);
+  }
+
   const build = await triggerPagesBuild();
   return new Response(JSON.stringify({ ok: true, build }), { status: 200, headers: { "Content-Type": "application/json" } });
 };

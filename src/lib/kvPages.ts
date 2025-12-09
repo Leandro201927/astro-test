@@ -21,3 +21,12 @@ export async function putPages(locals: App.Locals, pages: Page[]): Promise<void>
     await putPage(locals, p);
   }
 }
+
+export async function getGlobalComponents(locals: App.Locals): Promise<any> {
+  const value = await kvHelper.get<any>(locals, "config:global_components");
+  return value || null;
+}
+
+export async function putGlobalComponents(locals: App.Locals, components: any): Promise<void> {
+  await kvHelper.put(locals, "config:global_components", JSON.stringify(components));
+}
