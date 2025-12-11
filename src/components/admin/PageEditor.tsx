@@ -9,9 +9,12 @@ interface Props {
   initialPages: Page[];
   initialUser: any;
   globalComponents?: any;
+  initialMedia?: any[];
+  canChange?: boolean;
+  userEmail?: string;
 }
 
-export default function PageEditor({ initialPages, initialUser, globalComponents }: Props) {
+export default function PageEditor({ initialPages, initialUser, globalComponents, initialMedia, canChange = true, userEmail }: Props) {
   const [pages, setPages] = useState<Page[]>(initialPages);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const currentPage = pages[currentPageIndex] || pages[0];
@@ -26,7 +29,6 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
   const [saving, setSaving] = useState(false);
   const [buildStatus, setBuildStatus] = useState<string | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
-  const canChange = true;
 
   const [previewMode, setPreviewMode] = useState<'mobile' | 'tablet' | 'desktop'>('desktop');
   const [showLeftPanel, setShowLeftPanel] = useState(true);
@@ -37,6 +39,50 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
   const [seoTwitterOpen, setSeoTwitterOpen] = useState(false);
   const [compOpen, setCompOpen] = useState(true);
   const [libraryOpen, setLibraryOpen] = useState(false);
+
+  // Initial media loading
+  const [galleryItems, setGalleryItems] = useState<any[]>(initialMedia || []);
+  const mediaMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const item of galleryItems) {
+      if (item.key && item.url) {
+        map.set(item.key, item.url);
+        // Also map just the filename part if key is a path
+        const filename = item.key.split('/').pop();
+        if (filename) map.set(filename, item.url);
+      }
+    }
+    return map;
+  }, [galleryItems]);
+
+  const resolveMediaUrl = (val: string) => {
+    if (!val) return '';
+    if (val.startsWith('http') || val.startsWith('/')) return val;
+    return mediaMap.get(val) || val;
+  };
+// ... (rest of component) ...
+  const mediaAttrs = useMemo(() => {
+    const idx = selectedIndex ?? -1;
+    const comps = Array.isArray(currentPage?.components) ? currentPage.components : [];
+    const comp = comps[idx] || null;
+    let attrs: Record<string, any> = {};
+    if (comp) {
+      if (selectedSlot) {
+        const slotObj = ((comp.custom_attrs || {}) as Record<string, any>)[selectedSlot] || null;
+        const nestedComp = slotObj && typeof slotObj === 'object' ? (slotObj.value as any) : null;
+        attrs = (nestedComp?.custom_attrs || {}) as Record<string, any>;
+      } else {
+        attrs = (comp?.custom_attrs || {}) as Record<string, any>;
+      }
+    } else if (selectedGlobal && globalComps[selectedGlobal]) {
+      const g = globalComps[selectedGlobal];
+      attrs = (g?.custom_attrs || {}) as Record<string, any>;
+    }
+    const entries = Object.entries(attrs).filter(([_, v]) => v && typeof v === 'object' && (v.type === 'img' || v.type === 'file'));
+    return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
+  }, [currentPage, selectedIndex, selectedSlot, selectedGlobal, globalComps]);
+// ...
+
 
   // Helper values
   const hostText = typeof window !== 'undefined' ? window.location.host : 'localhost';
@@ -132,26 +178,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
   }, [currentPage, selectedIndex, selectedSlot, selectedGlobal, globalComps]);
 
-  const mediaAttrs = useMemo(() => {
-    const idx = selectedIndex ?? -1;
-    const comps = Array.isArray(currentPage?.components) ? currentPage.components : [];
-    const comp = comps[idx] || null;
-    let attrs: Record<string, any> = {};
-    if (comp) {
-      if (selectedSlot) {
-        const slotObj = ((comp.custom_attrs || {}) as Record<string, any>)[selectedSlot] || null;
-        const nestedComp = slotObj && typeof slotObj === 'object' ? (slotObj.value as any) : null;
-        attrs = (nestedComp?.custom_attrs || {}) as Record<string, any>;
-      } else {
-        attrs = (comp?.custom_attrs || {}) as Record<string, any>;
-      }
-    } else if (selectedGlobal && globalComps[selectedGlobal]) {
-      const g = globalComps[selectedGlobal];
-      attrs = (g?.custom_attrs || {}) as Record<string, any>;
-    }
-    const entries = Object.entries(attrs).filter(([_, v]) => v && typeof v === 'object' && (v.type === 'img' || v.type === 'file'));
-    return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
-  }, [currentPage, selectedIndex, selectedSlot]);
+
 
   const onEditAttr = (name: string, value: string) => {
     if (selectedGlobal) {
@@ -248,7 +275,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
   };
 
   const [showGallery, setShowGallery] = useState(false);
-  const [galleryItems, setGalleryItems] = useState<any[]>([]);
+
   const [activeMediaAttr, setActiveMediaAttr] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -838,7 +865,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                                 : currentPage?.components?.[selectedIndex || 0]?.name)
                         }
                       </div>
-                      {textAttrs.entries.length === 0 && <div className="empty-state">Este componente no tiene campos de texto editables.</div>}
+                      {textAttrs.entries.length === 0 && mediaAttrs.entries.length === 0 && objectAttrs.entries.length === 0 && arrayAttrs.entries.length === 0 && <div className="empty-state">Este componente no tiene propiedades editables.</div>}
                       {textAttrs.entries.map(([k, v]) => (
                         <div key={k} className="form-group">
                           <label>{k}</label>
@@ -849,7 +876,8 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                         <div className="form-group">
                           <label>Medios</label>
                           {mediaAttrs.entries.map(([k, v]) => {
-                            const url = String(v?.value || '');
+                            const rawUrl = String(v?.value || '');
+                            const url = resolveMediaUrl(rawUrl);
                             const baseUrl = url.split('?')[0];
                             const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(baseUrl);
                             const name = baseUrl.split('/')?.pop() || baseUrl;

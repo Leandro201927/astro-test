@@ -43,6 +43,9 @@ const globalComponentsKV = await getGlobalComponents(
 );
 const globalComponents = globalComponentsKV || globalComponentsDefault;
 
+import { getAllMedia } from "@/lib/media";
+const mediaItems = await getAllMedia(Astro.locals as App.Locals);
+
 const canChange = true;
 const email = session.data.user?.email;
 ---
@@ -62,6 +65,7 @@ const email = session.data.user?.email;
       globalComponents={globalComponents}
       canChange={canChange}
       userEmail={email}
+      initialMedia={mediaItems}
     />
   </body>
 </html>
