@@ -264,6 +264,18 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     return '';
   };
 
+  const baseFromUrl = (u: string): string => {
+    try { return u.split('?')[0]; } catch { return u; }
+  };
+  const isImageUrl = (u: string): boolean => {
+    const b = baseFromUrl(u);
+    return /^data:image\//.test(u) || /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(b);
+  };
+  const buildSrcSet = (u: string, widths: number[]): string => {
+    const base = u.split('#')[0];
+    return widths.map((w) => `${base}${base.includes('?') ? '&' : '?'}w=${w} ${w}w`).join(', ');
+  };
+
   const loadMediaOnce = async (force?: boolean) => {
     const now = Date.now();
     if (!force && galleryCacheRef.current && (now - galleryCacheRef.current.ts) < MEDIA_TTL_MS) {
@@ -763,7 +775,19 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                                 <div style={{ width: 160, height: 100, border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                   {url ? (
                                     isImage ? (
-                                      <img src={url} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      <img 
+                                        src={url} 
+                                        alt={name} 
+                                        loading="lazy" 
+                                        decoding="async" 
+                                        fetchPriority="low"
+                                        srcSet={buildSrcSet(url, [160, 320, 640])}
+                                        sizes="(max-width: 480px) 160px, 320px"
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                        onError={(e) => {
+                                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                        }}
+                                      />
                                     ) : (
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px', fontSize: 12 }}>
                                         <span style={{ display: 'inline-block', width: 16, height: 16, background: '#e5e7eb', borderRadius: 4 }}></span>
@@ -998,17 +1022,15 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                                   src={getMediaUrl(it)}
                                   alt={name}
                                   loading="lazy"
+                                  decoding="async"
+                                  fetchPriority="low"
+                                  srcSet={buildSrcSet(getMediaUrl(it), [320, 640, 960])}
+                                  sizes="(max-width: 480px) 320px, (max-width: 768px) 640px, 960px"
                                   style={{ 
                                     width: '100%', 
                                     height: '100%', 
                                     objectFit: 'cover',
                                     transition: 'transform 0.3s ease'
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    (e.target as HTMLImageElement).style.transform = 'scale(1.1)';
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    (e.target as HTMLImageElement).style.transform = 'scale(1)';
                                   }}
                                 />
                               ) : (
