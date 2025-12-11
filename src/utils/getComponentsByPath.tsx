@@ -5,16 +5,28 @@ export async function getComponentsByPath(
   props: Record<string, any> = {}
 ): Promise<JSX.Element | null> {
   try {
+    const toVarOrHex = (val: unknown): unknown => {
+      if (typeof val === 'string') {
+        if (val.startsWith('var:')) return `var(--${val.slice(4)})`;
+        if (val.startsWith('var(--')) {
+          const token = val.replace(/^var\(--|\)$/g, '').replace(/\)$/,'');
+          return `var(--${token})`;
+        }
+      }
+      return val;
+    };
     const flattenProps = (input: Record<string, any> = {}) => {
       const out: Record<string, any> = {};
       Object.entries(input).forEach(([k, v]) => {
         if (v && typeof v === "object" && "type" in v && "value" in v) {
           const t = (v as any).type;
-          const val = (v as any).value;
+          const value = (v as any).value;
           if (t === "component") {
-            out[k] = val;
+            out[k] = value;
+          } else if (t === 'color') {
+            out[k] = toVarOrHex(value);
           } else {
-            out[k] = val;
+            out[k] = value;
           }
         } else {    
           out[k] = v;
