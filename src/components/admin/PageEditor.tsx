@@ -159,7 +159,11 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
       if (!g) return;
       const ca = { ...(g.custom_attrs || {}) } as any;
       const ov = ca[name] || { type: "string", value: "" };
-      ca[name] = { ...ov, value };
+      const prev = String((ov as any).value || '');
+      const prevBase = prev.split('?')[0].split('#')[0];
+      const nextBase = String(value || '').split('?')[0].split('#')[0];
+      const v = prevBase && nextBase && prevBase === nextBase ? `${value}${value.includes('?') ? '&' : '?'}v=${Date.now()}` : value;
+      ca[name] = { ...ov, value: v };
       const nextG = { ...g, custom_attrs: ca };
       setGlobalComps({ ...globalComps, [selectedGlobal]: nextG });
       return;
@@ -177,14 +181,22 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
           const nestedComp = { ...(slotEntry.value || {}) } as any;
           const nestedAttrs = { ...(nestedComp.custom_attrs || {}) } as any;
           const ov = nestedAttrs[name] || { type: "string", value: "" };
-          nestedAttrs[name] = { ...ov, value };
+          const prev = String((ov as any).value || '');
+          const prevBase = prev.split('?')[0].split('#')[0];
+          const nextBase = String(value || '').split('?')[0].split('#')[0];
+          const v = prevBase && nextBase && prevBase === nextBase ? `${value}${value.includes('?') ? '&' : '?'}v=${Date.now()}` : value;
+          nestedAttrs[name] = { ...ov, value: v };
           nestedComp.custom_attrs = nestedAttrs;
           ca[selectedSlot] = { ...slotEntry, value: nestedComp };
           comps[i] = { ...comps[i], custom_attrs: ca };
           copy.components = comps as any;
         } else {
           const ov = ca[name] || { type: "string", value: "" };
-          ca[name] = { ...ov, value };
+          const prev = String((ov as any).value || '');
+          const prevBase = prev.split('?')[0].split('#')[0];
+          const nextBase = String(value || '').split('?')[0].split('#')[0];
+          const v = prevBase && nextBase && prevBase === nextBase ? `${value}${value.includes('?') ? '&' : '?'}v=${Date.now()}` : value;
+          ca[name] = { ...ov, value: v };
           comps[i] = { ...comps[i], custom_attrs: ca };
           copy.components = comps as any;
         }
@@ -276,6 +288,17 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     return widths.map((w) => `${base}${base.includes('?') ? '&' : '?'}w=${w} ${w}w`).join(', ');
   };
 
+  const computePropsKey = (p: Record<string, any>): string => {
+    const vals = Object.values(p).map((v) => (typeof v === 'string' ? v : JSON.stringify(v)));
+    const s = vals.join('|');
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) - h) + s.charCodeAt(i);
+      h |= 0;
+    }
+    return String(h);
+  };
+
   const loadMediaOnce = async (force?: boolean) => {
     const now = Date.now();
     if (!force && galleryCacheRef.current && (now - galleryCacheRef.current.ts) < MEDIA_TTL_MS) {
@@ -329,12 +352,73 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     }
   };
 
+  const sanitizeUrl = (u: string): string => {
+    try {
+      const [base, hash] = u.split('#');
+      const urlObj = new URL(base, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+      urlObj.searchParams.delete('v');
+      return `${urlObj.pathname}${urlObj.search}${hash ? `#${hash}` : ''}`;
+    } catch { return u; }
+  };
+  const sanitizeAttrs = (attrs: Record<string, any>) => {
+    const out: Record<string, any> = {};
+    Object.entries(attrs || {}).forEach(([k, v]) => {
+      if (v && typeof v === 'object' && 'type' in v) {
+        const t = (v as any).type;
+        const val = (v as any).value;
+        if (t === 'img' || t === 'file' || t === 'url' || t === 'string') {
+          if (typeof val === 'string') {
+            out[k] = { ...v, value: sanitizeUrl(val) };
+          } else if (val && typeof val === 'object') {
+            const copy = { ...(val as any) } as any;
+            if (typeof copy.src === 'string') copy.src = sanitizeUrl(copy.src);
+            if (typeof copy.url === 'string') copy.url = sanitizeUrl(copy.url);
+            out[k] = { ...v, value: copy };
+          } else {
+            out[k] = v;
+          }
+        } else {
+          out[k] = v;
+        }
+      } else {
+        out[k] = v;
+      }
+    });
+    return out;
+  };
+  const sanitizePages = (ps: Page[]) => {
+    return ps.map((p) => {
+      const cp: Page = { ...(p as any) };
+      const comps = Array.isArray(cp.components) ? cp.components.map((c: any) => {
+        const cc = { ...(c as any) };
+        cc.custom_attrs = sanitizeAttrs(cc.custom_attrs || {});
+        return cc;
+      }) : [] as any[];
+      cp.components = comps as any;
+      cp.open_graph = { ...(cp.open_graph || {}) } as any;
+      const ogImg = (cp.open_graph as any).og_image || {};
+      if (typeof ogImg.src === 'string') ogImg.src = sanitizeUrl(ogImg.src);
+      (cp.open_graph as any).og_image = ogImg;
+      if (typeof (cp.open_graph as any).twitter_image === 'string') {
+        (cp.open_graph as any).twitter_image = sanitizeUrl((cp.open_graph as any).twitter_image);
+      }
+      return cp;
+    });
+  };
+  const sanitizeGlobal = (g: any) => {
+    if (!g) return g;
+    const out = { ...g };
+    out.custom_attrs = sanitizeAttrs(out.custom_attrs || {});
+    return out;
+  };
   const onSave = async () => {
     if (!canChange) return;
     try {
       setSaving(true);
       setBuildStatus("QUEUED");
-      const res = await fetch("/api/admin/pages/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pages, global_components: globalComps }) });
+      const payloadPages = sanitizePages(pages);
+      const payloadGlobals = { header: sanitizeGlobal(globalComps.header), footer: sanitizeGlobal(globalComps.footer) };
+      const res = await fetch("/api/admin/pages/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pages: payloadPages, global_components: payloadGlobals }) });
       if (!res.ok) {
         setSaving(false);
         return;
@@ -541,7 +625,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                            data-top-index="global_header"
                            style={{ marginBottom: '1rem' }}
                          >
-                           <DynamicIsland componentPath={`${globalComps.header.atomic_hierarchy}s/${globalComps.header.name}`} props={flattenProps(globalComps.header.custom_attrs || {})} />
+                          <DynamicIsland key={computePropsKey(flattenProps(globalComps.header.custom_attrs || {}))} componentPath={`${globalComps.header.atomic_hierarchy}s/${globalComps.header.name}`} props={flattenProps(globalComps.header.custom_attrs || {})} />
                          </div>
                       )}
 
@@ -557,7 +641,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                               className={`comp-wrap ${active ? "active" : ""}`} 
                               data-top-index={i}
                             >
-                              <DynamicIsland componentPath={componentPath} props={props} />
+                              <DynamicIsland key={computePropsKey(props)} componentPath={componentPath} props={props} />
                               <div className="comp-label">{component.name}</div>
                             </div>
                           );
@@ -571,7 +655,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                            data-top-index="global_footer"
                            style={{ marginTop: '1rem' }}
                          >
-                           <DynamicIsland componentPath={`${globalComps.footer.atomic_hierarchy}s/${globalComps.footer.name}`} props={flattenProps(globalComps.footer.custom_attrs || {})} />
+                          <DynamicIsland key={computePropsKey(flattenProps(globalComps.footer.custom_attrs || {}))} componentPath={`${globalComps.footer.atomic_hierarchy}s/${globalComps.footer.name}`} props={flattenProps(globalComps.footer.custom_attrs || {})} />
                          </div>
                       )}
                     </>
@@ -776,6 +860,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                                   {url ? (
                                     isImage ? (
                                       <img 
+                                        key={url}
                                         src={url} 
                                         alt={name} 
                                         loading="lazy" 
@@ -1018,7 +1103,8 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                               overflow: 'hidden'
                             }}>
                               {isImage ? (
-                                <img 
+                                  <img 
+                                  key={getMediaUrl(it)}
                                   src={getMediaUrl(it)}
                                   alt={name}
                                   loading="lazy"
@@ -1154,6 +1240,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                     <div className="media-thumb">
                       {isImage ? (
                         <img src={getMediaUrl(it)}
+                             key={getMediaUrl(it)}
                              alt={it.key || fullKey}
                              style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 6 }} />
                       ) : (
