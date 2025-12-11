@@ -866,12 +866,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                                         loading="lazy" 
                                         decoding="async" 
                                         fetchPriority="low"
-                                        srcSet={buildSrcSet(url, [160, 320, 640])}
-                                        sizes="(max-width: 480px) 160px, 320px"
                                         style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-                                        onError={(e) => {
-                                          (e.currentTarget as HTMLImageElement).style.display = 'none';
-                                        }}
                                       />
                                     ) : (
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px', fontSize: 12 }}>
