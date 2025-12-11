@@ -90,6 +90,48 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
   }, [currentPage, selectedIndex, selectedSlot]);
 
+  const arrayAttrs = useMemo(() => {
+    const idx = selectedIndex ?? -1;
+    const comps = Array.isArray(currentPage?.components) ? currentPage.components : [];
+    const comp = comps[idx] || null;
+    let attrs: Record<string, any> = {};
+    if (comp) {
+      if (selectedSlot) {
+        const slotObj = ((comp.custom_attrs || {}) as Record<string, any>)[selectedSlot] || null;
+        const nestedComp = slotObj && typeof slotObj === 'object' ? (slotObj.value as any) : null;
+        attrs = (nestedComp?.custom_attrs || {}) as Record<string, any>;
+      } else {
+        attrs = (comp?.custom_attrs || {}) as Record<string, any>;
+      }
+    } else if (selectedGlobal && globalComps[selectedGlobal]) {
+      const g = globalComps[selectedGlobal];
+      attrs = (g?.custom_attrs || {}) as Record<string, any>;
+    }
+    const entries = Object.entries(attrs).filter(([_, v]) => v && typeof v === 'object' && v.type === 'array' && Array.isArray(v.value));
+    return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
+  }, [currentPage, selectedIndex, selectedSlot, selectedGlobal, globalComps]);
+
+  const objectAttrs = useMemo(() => {
+    const idx = selectedIndex ?? -1;
+    const comps = Array.isArray(currentPage?.components) ? currentPage.components : [];
+    const comp = comps[idx] || null;
+    let attrs: Record<string, any> = {};
+    if (comp) {
+      if (selectedSlot) {
+        const slotObj = ((comp.custom_attrs || {}) as Record<string, any>)[selectedSlot] || null;
+        const nestedComp = slotObj && typeof slotObj === 'object' ? (slotObj.value as any) : null;
+        attrs = (nestedComp?.custom_attrs || {}) as Record<string, any>;
+      } else {
+        attrs = (comp?.custom_attrs || {}) as Record<string, any>;
+      }
+    } else if (selectedGlobal && globalComps[selectedGlobal]) {
+      const g = globalComps[selectedGlobal];
+      attrs = (g?.custom_attrs || {}) as Record<string, any>;
+    }
+    const entries = Object.entries(attrs).filter(([_, v]) => v && typeof v === 'object' && v.type === 'object' && v.value && typeof v.value === 'object');
+    return { compIndex: idx, entries } as { compIndex: number; entries: [string, any][] };
+  }, [currentPage, selectedIndex, selectedSlot, selectedGlobal, globalComps]);
+
   const mediaAttrs = useMemo(() => {
     const idx = selectedIndex ?? -1;
     const comps = Array.isArray(currentPage?.components) ? currentPage.components : [];
@@ -143,6 +185,47 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
         } else {
           const ov = ca[name] || { type: "string", value: "" };
           ca[name] = { ...ov, value };
+          comps[i] = { ...comps[i], custom_attrs: ca };
+          copy.components = comps as any;
+        }
+      }
+      return copy;
+    });
+    setPages(next);
+  };
+
+  const onPatchAttr = (name: string, nextValue: any) => {
+    if (selectedGlobal) {
+      const g = globalComps[selectedGlobal];
+      if (!g) return;
+      const ca = { ...(g.custom_attrs || {}) } as any;
+      const ov = ca[name] || { type: "string", value: "" };
+      ca[name] = { ...ov, value: nextValue };
+      const nextG = { ...g, custom_attrs: ca };
+      setGlobalComps({ ...globalComps, [selectedGlobal]: nextG });
+      return;
+    }
+
+    const next = pages.map((p) => {
+      if (p.slug !== currentPage.slug) return p as Page;
+      const copy = { ...p } as Page;
+      const comps = Array.isArray(copy.components) ? [...copy.components] : [] as any[];
+      const i = textAttrs.compIndex;
+      if (i >= 0 && comps[i]) {
+        const ca = { ...(comps[i].custom_attrs || {}) } as any;
+        if (selectedSlot) {
+          const slotEntry = ca[selectedSlot] || { type: "component", value: null };
+          const nestedComp = { ...(slotEntry.value || {}) } as any;
+          const nestedAttrs = { ...(nestedComp.custom_attrs || {}) } as any;
+          const ov = nestedAttrs[name] || { type: "string", value: "" };
+          nestedAttrs[name] = { ...ov, value: nextValue };
+          nestedComp.custom_attrs = nestedAttrs;
+          ca[selectedSlot] = { ...slotEntry, value: nestedComp };
+          comps[i] = { ...comps[i], custom_attrs: ca };
+          copy.components = comps as any;
+        } else {
+          const ov = ca[name] || { type: "string", value: "" };
+          ca[name] = { ...ov, value: nextValue };
           comps[i] = { ...comps[i], custom_attrs: ca };
           copy.components = comps as any;
         }
@@ -669,12 +752,121 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                       {mediaAttrs.entries.length > 0 && (
                         <div className="form-group">
                           <label>Medios</label>
-                          {mediaAttrs.entries.map(([k, v]) => (
-                            <div key={k} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                              <input value={String(v?.value || "")} onChange={(e) => onEditAttr(k, e.target.value)} />
-                              <button className="btn-secondary" onClick={() => { setActiveMediaAttr(k); setShowGallery(true); }}>Galería</button>
-                            </div>
-                          ))}
+                          {mediaAttrs.entries.map(([k, v]) => {
+                            const url = String(v?.value || '');
+                            const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
+                            const name = url.split('/')?.pop() || url;
+                            const ext = name?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+                            return (
+                              <div key={k} style={{ display: 'grid', gridTemplateColumns: '180px 1fr auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                <div style={{ width: 160, height: 100, border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {url ? (
+                                    isImage ? (
+                                      <img src={url} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px', fontSize: 12 }}>
+                                        <span style={{ display: 'inline-block', width: 16, height: 16, background: '#e5e7eb', borderRadius: 4 }}></span>
+                                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>{name}</span>
+                                        {ext && (<span style={{ fontSize: 10, background: '#f3f4f6', color: '#6b7280', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase' }}>{ext}</span>)}
+                                      </div>
+                                    )
+                                  ) : (
+                                    <span style={{ fontSize: 10, color: '#9ca3af' }}>Sin archivo</span>
+                                  )}
+                                </div>
+                                <input value={url} onChange={(e) => onEditAttr(k, e.target.value)} />
+                                <button className="btn-secondary" onClick={() => { setActiveMediaAttr(k); setShowGallery(true); }}>Galería</button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {objectAttrs.entries.length > 0 && (
+                        <div className="form-group">
+                          <label>Objetos</label>
+                          {objectAttrs.entries.map(([k, v]) => {
+                            const obj = (v?.value || {}) as Record<string, any>;
+                            const keys = Object.keys(obj || {});
+                            if (keys.length === 2) {
+                              const [keyA, keyB] = keys;
+                              return (
+                                <div key={k} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                                  <div className="form-group">
+                                    <label>{keyA}</label>
+                                    <input value={String(obj[keyA] ?? '')} onChange={(e) => onPatchAttr(k, { ...obj, [keyA]: e.target.value })} />
+                                  </div>
+                                  <div className="form-group">
+                                    <label>{keyB}</label>
+                                    <input value={String(obj[keyB] ?? '')} onChange={(e) => onPatchAttr(k, { ...obj, [keyB]: e.target.value })} />
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={k} className="form-group">
+                                <label>{k} (JSON)</label>
+                                <textarea rows={3} value={JSON.stringify(obj, null, 2)} onChange={(e) => { try { onPatchAttr(k, JSON.parse(e.target.value)); } catch {} }} />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {arrayAttrs.entries.length > 0 && (
+                        <div className="form-group">
+                          <label>Arrays</label>
+                          {arrayAttrs.entries.map(([k, v]) => {
+                            const arr = Array.isArray(v?.value) ? (v.value as any[]) : [];
+                            const complex = arr.length > 0 && arr.every((it) => it && typeof it === 'object' && it.type === 'object' && it.value && typeof it.value === 'object');
+                            if (complex) {
+                              const keys = Object.keys(arr[0].value || {});
+                              const keyA = keys[0];
+                              const keyB = keys[1];
+                              return (
+                                <div key={k} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                                  <div style={{ display: 'grid', gap: 8 }}>
+                                    {arr.map((item: any, idx: number) => (
+                                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
+                                        <div className="form-group">
+                                          <label>{keyA}</label>
+                                          <input value={String(item.value?.[keyA] ?? '')} onChange={(e) => {
+                                            const next = arr.slice();
+                                            next[idx] = { type: 'object', value: { ...item.value, [keyA]: e.target.value } };
+                                            onPatchAttr(k, next);
+                                          }} />
+                                        </div>
+                                        <div className="form-group">
+                                          <label>{keyB}</label>
+                                          <input value={String(item.value?.[keyB] ?? '')} onChange={(e) => {
+                                            const next = arr.slice();
+                                            next[idx] = { type: 'object', value: { ...item.value, [keyB]: e.target.value } };
+                                            onPatchAttr(k, next);
+                                          }} />
+                                        </div>
+                                        <button className="btn-secondary" onClick={() => {
+                                          const next = arr.filter((_, i) => i !== idx);
+                                          onPatchAttr(k, next);
+                                        }}>Eliminar</button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div style={{ marginTop: 8 }}>
+                                    <button className="btn-secondary" onClick={() => {
+                                      const empty = { type: 'object', value: { [keyA]: '', [keyB]: '' } };
+                                      onPatchAttr(k, [...arr, empty]);
+                                    }}>Añadir ítem</button>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div key={k} className="form-group">
+                                <label>{k} (JSON)</label>
+                                <textarea rows={2} value={JSON.stringify(arr)} onChange={(e) => { try { onPatchAttr(k, JSON.parse(e.target.value)); } catch {} }} />
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </>
