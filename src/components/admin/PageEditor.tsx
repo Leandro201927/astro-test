@@ -754,11 +754,12 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                           <label>Medios</label>
                           {mediaAttrs.entries.map(([k, v]) => {
                             const url = String(v?.value || '');
-                            const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(url);
-                            const name = url.split('/')?.pop() || url;
+                            const baseUrl = url.split('?')[0];
+                            const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(baseUrl);
+                            const name = baseUrl.split('/')?.pop() || baseUrl;
                             const ext = name?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
                             return (
-                              <div key={k} style={{ display: 'grid', gridTemplateColumns: '180px 1fr auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                              <div key={k} style={{ display: 'grid', gridTemplateColumns: '180px auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                                 <div style={{ width: 160, height: 100, border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden', background: '#f9fafb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                   {url ? (
                                     isImage ? (
@@ -774,7 +775,6 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                                     <span style={{ fontSize: 10, color: '#9ca3af' }}>Sin archivo</span>
                                   )}
                                 </div>
-                                <input value={url} onChange={(e) => onEditAttr(k, e.target.value)} />
                                 <button className="btn-secondary" onClick={() => { setActiveMediaAttr(k); setShowGallery(true); }}>Galería</button>
                               </div>
                             );
@@ -824,11 +824,11 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                               const keyA = keys[0];
                               const keyB = keys[1];
                               return (
-                                <div key={k} style={{ border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                                <div key={k} style={{ marginBottom: 8 }}>
                                   <div style={{ display: 'grid', gap: 8 }}>
                                     {arr.map((item: any, idx: number) => (
                                       <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end' }}>
-                                        <div className="form-group">
+                                        <div className="form-group" style={{ margin: 0 }}>
                                           <label>{keyA}</label>
                                           <input value={String(item.value?.[keyA] ?? '')} onChange={(e) => {
                                             const next = arr.slice();
@@ -836,7 +836,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                                             onPatchAttr(k, next);
                                           }} />
                                         </div>
-                                        <div className="form-group">
+                                        <div className="form-group" style={{ margin: 0 }}>
                                           <label>{keyB}</label>
                                           <input value={String(item.value?.[keyB] ?? '')} onChange={(e) => {
                                             const next = arr.slice();
@@ -844,10 +844,28 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                                             onPatchAttr(k, next);
                                           }} />
                                         </div>
-                                        <button className="btn-secondary" onClick={() => {
-                                          const next = arr.filter((_, i) => i !== idx);
-                                          onPatchAttr(k, next);
-                                        }}>Eliminar</button>
+                                        <button 
+                                          aria-label="Eliminar"
+                                          title="Eliminar"
+                                          onClick={() => {
+                                            const next = arr.filter((_, i) => i !== idx);
+                                            onPatchAttr(k, next);
+                                          }}
+                                          style={{ 
+                                            width: 24, height: 24, 
+                                            border: '1px solid #e5e7eb', 
+                                            borderRadius: 4, 
+                                            background: '#fff', 
+                                            display: 'inline-flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'center'
+                                          }}
+                                        >
+                                          <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" fill="none" strokeWidth="2">
+                                            <line x1="6" y1="6" x2="18" y2="18"/>
+                                            <line x1="6" y1="18" x2="18" y2="6"/>
+                                          </svg>
+                                        </button>
                                       </div>
                                     ))}
                                   </div>
