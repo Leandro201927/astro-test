@@ -16,6 +16,17 @@ body {
   color: var(--color-text);
 }
 
+/* Layout helpers used by components */
+.section {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+.section .content {
+  width: 100%;
+  max-width: 1200px;
+}
+
 h1, h2, h3, h4, h5, h6 { 
   margin-block-start: 0;
   margin-block-end: 0;

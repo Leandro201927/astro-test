@@ -442,7 +442,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                       {/* Global Header */}
                       {globalComps?.header && (
                          <div 
-                           className={`comp-wrap ${selectedGlobal === 'header' ? "active" : ""}`} 
+                           className={`comp-wrap sticky-top ${selectedGlobal === 'header' ? "active" : ""}`} 
                            data-top-index="global_header"
                            style={{ marginBottom: '1rem' }}
                          >
