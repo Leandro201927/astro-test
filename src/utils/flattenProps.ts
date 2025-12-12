@@ -12,7 +12,7 @@ const toVarOrHex = (v: unknown): unknown => {
   return v;
 };
 
-export const flattenProps = (input = {}) => {
+export const flattenProps = (input = {}, resolveMedia?: (url: string) => string) => {
 	const out = {} as Record<string, any>;
 	Object.entries(input as Record<string, any>).forEach(([k, v]) => {
 		if (v && typeof v === "object" && "type" in v && "value" in v) {
@@ -26,7 +26,12 @@ export const flattenProps = (input = {}) => {
 				const candidates = ['src', 'url', 'href', 'path'];
 				for (const c of candidates) {
 					const s = (val as any)[c];
-					if (typeof s === 'string') { out[k] = s; return; }
+					if (typeof s === 'string') {
+						// Apply media resolver if provided and this looks like a media attribute
+						const resolved = resolveMedia && (type === 'img' || type === 'file') ? resolveMedia(s) : s;
+						out[k] = resolved;
+						return;
+					}
 				}
 				if (type === 'string' || type === 'text' || type === 'url') {
 					out[k] = '';
@@ -35,7 +40,9 @@ export const flattenProps = (input = {}) => {
 				}
 			} else {
 				const base = typeof val === 'string' ? val : String(val ?? '');
-				out[k] = (type === 'color') ? toVarOrHex(base) : base;
+				// Apply media resolver if provided and this looks like a media attribute
+				const resolved = resolveMedia && (type === 'img' || type === 'file') ? resolveMedia(base) : base;
+				out[k] = (type === 'color') ? toVarOrHex(resolved) : resolved;
 			}
 		} else {
 			out[k] = v;

@@ -47,6 +47,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     for (const item of galleryItems) {
       if (item.key && item.url) {
         map.set(item.key, item.url);
+        map.set(`/${item.key}`, item.url);
         // Also map just the filename part if key is a path
         const filename = item.key.split('/').pop();
         if (filename) map.set(filename, item.url);
@@ -57,10 +58,19 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
 
   const resolveMediaUrl = (val: string) => {
     if (!val) return '';
-    if (val.startsWith('http') || val.startsWith('/')) return val;
-    return mediaMap.get(val) || val;
+    // Pass through absolute URLs and API proxy URLs
+    if (val.startsWith('http') || val.startsWith('/api/admin/media/file')) return val;
+    // Normalize keys that may start with '/'
+    const keyCandidate = val.replace(/^\/+/, '');
+    // Try to resolve from media map (original and normalized)
+    const resolved = mediaMap.get(val) || mediaMap.get(keyCandidate);
+    if (resolved) return resolved;
+    // If not in map, construct API proxy URL assuming val is a key
+    return `/api/admin/media/file?key=${encodeURIComponent(keyCandidate)}`;
   };
-// ... (rest of component) ...
+
+  // Media se carga bajo demanda (ej. al abrir la galería)
+
   const mediaAttrs = useMemo(() => {
     const idx = selectedIndex ?? -1;
     const comps = Array.isArray(currentPage?.components) ? currentPage.components : [];
@@ -89,9 +99,9 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
   const og = currentPage?.open_graph || {};
   const metaTitle = currentPage?.open_graph?.og_title || currentPage?.title || '';
   const metaDescription = currentPage?.open_graph?.og_description || currentPage?.content_text_summary || '';
-  const ogImageSrc = currentPage?.open_graph?.og_image?.src || '';
+  const ogImageSrc = resolveMediaUrl(currentPage?.open_graph?.og_image?.src || '');
   const ogImage = currentPage?.open_graph?.og_image || {};
-  const twitterImageSrc = currentPage?.open_graph?.twitter_image || '';
+  const twitterImageSrc = resolveMediaUrl(currentPage?.open_graph?.twitter_image || '');
   const twitterCard = currentPage?.open_graph?.twitter_card || 'summary_large_image';
 
   // Helper functions
@@ -315,6 +325,45 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     return widths.map((w) => `${base}${base.includes('?') ? '&' : '?'}w=${w} ${w}w`).join(', ');
   };
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (document.readyState === 'complete') return;
+    const sandbox = document.querySelector('.preview-sandbox');
+    if (!sandbox) return;
+    const ph = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
+    const imgs = Array.from(sandbox.querySelectorAll('img'));
+    imgs.forEach((img) => {
+      if (img.dataset.deferred === 'true') return;
+      const src = img.getAttribute('src');
+      const srcset = img.getAttribute('srcset');
+      if (src) {
+        img.dataset.deferSrc = src;
+        img.setAttribute('src', ph);
+      }
+      if (srcset) {
+        img.dataset.deferSrcset = srcset;
+        img.removeAttribute('srcset');
+      }
+      img.dataset.deferred = 'true';
+    });
+    const restore = () => {
+      const els = Array.from(sandbox.querySelectorAll('img[data-deferred="true"]'));
+      els.forEach((el) => {
+        const ds = el.dataset.deferSrc;
+        const dss = el.dataset.deferSrcset;
+        if (ds) el.setAttribute('src', ds);
+        if (dss) el.setAttribute('srcset', dss);
+        delete el.dataset.deferSrc;
+        delete el.dataset.deferSrcset;
+        delete el.dataset.deferred;
+      });
+    };
+    window.addEventListener('load', restore, { once: true });
+    return () => {
+      window.removeEventListener('load', restore);
+    };
+  }, [currentPage, previewMode, selectedIndex, selectedGlobal, selectedSlot]);
+
   const computePropsKey = (p: Record<string, any>): string => {
     const vals = Object.values(p).map((v) => (typeof v === 'string' ? v : JSON.stringify(v)));
     const s = vals.join('|');
@@ -356,6 +405,17 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     if (!showGallery) return;
     loadMediaOnce(false);
   }, [showGallery]);
+
+  useEffect(() => {
+    const run = () => { loadMediaOnce(false); };
+    if (typeof window === 'undefined') return;
+    if (document.readyState === 'complete') {
+      setTimeout(run, 0);
+    } else {
+      window.addEventListener('load', run, { once: true });
+      return () => { window.removeEventListener('load', run); };
+    }
+  }, []);
 
   const onUploadSubmit = async () => {
     if (!uploadFile) return;
@@ -652,7 +712,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                            data-top-index="global_header"
                            style={{ marginBottom: '1rem' }}
                          >
-                          <DynamicIsland key={computePropsKey(flattenProps(globalComps.header.custom_attrs || {}))} componentPath={`${globalComps.header.atomic_hierarchy}s/${globalComps.header.name}`} props={flattenProps(globalComps.header.custom_attrs || {})} />
+                          <DynamicIsland key={computePropsKey(flattenProps(globalComps.header.custom_attrs || {}, resolveMediaUrl))} componentPath={`${globalComps.header.atomic_hierarchy}s/${globalComps.header.name}`} props={flattenProps(globalComps.header.custom_attrs || {}, resolveMediaUrl)} />
                          </div>
                       )}
 
@@ -660,7 +720,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                         {Array.isArray(currentPage.components) && currentPage.components.map((component, i) => {
                           const dir = String(component.atomic_hierarchy).endsWith("s") ? String(component.atomic_hierarchy) : `${component.atomic_hierarchy}s`;
                           const componentPath = `${dir}/${component.name}`;
-                          const props = flattenProps(component.custom_attrs || {});
+                          const props = flattenProps(component.custom_attrs || {}, resolveMediaUrl);
                           const active = selectedIndex === i && !selectedSlot;
                           return (
                             <div 
@@ -682,7 +742,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                            data-top-index="global_footer"
                            style={{ marginTop: '1rem' }}
                          >
-                          <DynamicIsland key={computePropsKey(flattenProps(globalComps.footer.custom_attrs || {}))} componentPath={`${globalComps.footer.atomic_hierarchy}s/${globalComps.footer.name}`} props={flattenProps(globalComps.footer.custom_attrs || {})} />
+                          <DynamicIsland key={computePropsKey(flattenProps(globalComps.footer.custom_attrs || {}, resolveMediaUrl))} componentPath={`${globalComps.footer.atomic_hierarchy}s/${globalComps.footer.name}`} props={flattenProps(globalComps.footer.custom_attrs || {}, resolveMediaUrl)} />
                          </div>
                       )}
                     </>
@@ -876,11 +936,24 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                         <div className="form-group">
                           <label>Medios</label>
                           {mediaAttrs.entries.map(([k, v]) => {
-                            const rawUrl = String(v?.value || '');
-                            const url = resolveMediaUrl(rawUrl);
-                            const baseUrl = url.split('?')[0];
-                            const isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(baseUrl);
-                            const name = baseUrl.split('/')?.pop() || baseUrl;
+                            const val = (v?.value as any);
+                            const raw = typeof val === 'string' ? val : (val && typeof val === 'object' ? (val.src || val.url || '') : '');
+                            const url = resolveMediaUrl(raw);
+                            let name = '';
+                            let isImage = false;
+                            try {
+                              if (url) {
+                                const u = new URL(url, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+                                const keyParam = u.searchParams.get('key');
+                                const candidate = (keyParam || u.pathname.split('/').pop() || '').split('#')[0];
+                                name = candidate || url;
+                                isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(candidate);
+                              }
+                            } catch {
+                              const base = url.split('?')[0];
+                              name = base.split('/').pop() || base;
+                              isImage = /\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name);
+                            }
                             const ext = name?.match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
                             return (
                               <div key={k} style={{ display: 'grid', gridTemplateColumns: '180px auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>

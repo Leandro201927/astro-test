@@ -6,6 +6,12 @@ export async function getComponentByPath(
 ): Promise<JSX.Element | null> {
   try {
     // Helper: flatten structured custom_attrs ({ type, value }) to raw values
+    const resolveMedia = (s: string): string => {
+      if (!s) return '';
+      if (s.startsWith('http') || s.startsWith('/api/admin/media/file')) return s;
+      const keyCandidate = s.replace(/^\/+/, '');
+      return `/api/admin/media/file?key=${encodeURIComponent(keyCandidate)}`;
+    };
     const toVarOrHex = (val: unknown): unknown => {
       if (typeof val === 'string') {
         if (val.startsWith('var:')) return `var(--${val.slice(4)})`;
@@ -26,6 +32,17 @@ export async function getComponentByPath(
             out[k] = value;
           } else if (t === 'color') {
             out[k] = toVarOrHex(value);
+          } else if (t === 'img' || t === 'file') {
+            if (typeof value === 'string') {
+              out[k] = resolveMedia(value);
+            } else if (value && typeof value === 'object') {
+              const copy: any = { ...(value as any) };
+              if (typeof copy.src === 'string') copy.src = resolveMedia(copy.src);
+              if (typeof copy.url === 'string') copy.url = resolveMedia(copy.url);
+              out[k] = copy;
+            } else {
+              out[k] = value;
+            }
           } else {
             out[k] = value;
           }

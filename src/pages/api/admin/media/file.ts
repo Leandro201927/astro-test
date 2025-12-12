@@ -14,9 +14,6 @@ export const GET: APIRoute = async ({ url, cookies }) => {
   const r2PublicUrl = (import.meta.env.R2_PUBLIC_URL as string) || "";
   const key = url.searchParams.get("key");
   const directUrl = url.searchParams.get("url");
-  const extra = new URLSearchParams(url.searchParams);
-  extra.delete("url");
-  const extraQuery = extra.toString();
 
   console.log('[media/file] Request:', { key, clientWebsiteId: !!clientWebsiteId, r2PublicUrl: !!r2PublicUrl, backendBase });
 
@@ -25,7 +22,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
   // Strategy 1: Try direct R2 public URL if key provided and R2_PUBLIC_URL is configured
   // Skip if R2_PUBLIC_URL is the private .r2.cloudflarestorage.com domain
   if (key && r2PublicUrl && !r2PublicUrl.includes('.r2.cloudflarestorage.com')) {
-    const publicUrl = `${r2PublicUrl}/${key}${extraQuery ? `?${extraQuery}` : ''}`;
+    const publicUrl = `${r2PublicUrl}/${key}`;
     console.log('[media/file] Trying public URL:', publicUrl);
     res = await fetch(publicUrl, { method: "GET" }).catch(() => null);
     if (res && res.ok) {
@@ -39,7 +36,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 
   // Strategy 2: Try backend proxy if key provided
   if (key && clientWebsiteId) {
-    const target = `${backendBase}/api/cloudflare/r2/file/${encodeURIComponent(clientWebsiteId)}?key=${encodeURIComponent(key)}${extraQuery ? `&${extraQuery}` : ''}`;
+    const target = `${backendBase}/api/cloudflare/r2/file/${encodeURIComponent(clientWebsiteId)}?key=${encodeURIComponent(key)}`;
     console.log('[media/file] Trying backend proxy:', target);
     res = await fetch(target, { method: "GET" }).catch(() => null);
     if (res) {
@@ -49,9 +46,8 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 
   // Strategy 3: Try direct URL if provided
   if ((!res || !res.ok) && directUrl) {
-    const du = `${directUrl}${extraQuery ? (directUrl.includes('?') ? '&' : '?') + extraQuery : ''}`;
-    console.log('[media/file] Trying direct URL:', du);
-    res = await fetch(du, { method: "GET" }).catch(() => null);
+    console.log('[media/file] Trying direct URL:', directUrl);
+    res = await fetch(directUrl, { method: "GET" }).catch(() => null);
   }
 
   // No successful response
