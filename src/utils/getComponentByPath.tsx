@@ -8,8 +8,10 @@ export async function getComponentByPath(
     // Helper: flatten structured custom_attrs ({ type, value }) to raw values
     const resolveMedia = (s: string): string => {
       if (!s) return '';
-      if (s.startsWith('http') || s.startsWith('/api/admin/media/file')) return s;
-      const keyCandidate = s.replace(/^\/+/, '');
+      const clean = String(s).trim().replace(/^`+|`+$/g, '').replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
+      if (/^https?:\/\//i.test(clean) || clean.startsWith('/api/admin/media/file') || /^data:image\//i.test(clean)) return clean;
+      if (clean.startsWith('//')) return `https:${clean}`;
+      const keyCandidate = clean.replace(/^\/+/, '');
       return `/api/admin/media/file?key=${encodeURIComponent(keyCandidate)}`;
     };
     const toVarOrHex = (val: unknown): unknown => {

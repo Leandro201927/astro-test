@@ -58,12 +58,14 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
 
   const resolveMediaUrl = (val: string) => {
     if (!val) return '';
+    const clean = String(val).trim().replace(/^`+|`+$/g, '').replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
     // Pass through absolute URLs and API proxy URLs
-    if (val.startsWith('http') || val.startsWith('/api/admin/media/file')) return val;
+    if (/^https?:\/\//i.test(clean) || clean.startsWith('/api/admin/media/file') || /^data:image\//i.test(clean)) return clean;
+    if (clean.startsWith('//')) return `https:${clean}`;
     // Normalize keys that may start with '/'
-    const keyCandidate = val.replace(/^\/+/, '');
+    const keyCandidate = clean.replace(/^\/+/, '');
     // Try to resolve from media map (original and normalized)
-    const resolved = mediaMap.get(val) || mediaMap.get(keyCandidate);
+    const resolved = mediaMap.get(clean) || mediaMap.get(keyCandidate);
     if (resolved) return resolved;
     // If not in map, construct API proxy URL assuming val is a key
     return `/api/admin/media/file?key=${encodeURIComponent(keyCandidate)}`;
