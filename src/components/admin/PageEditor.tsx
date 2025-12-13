@@ -466,13 +466,25 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
       return `${urlObj.pathname}${urlObj.search}${hash ? `#${hash}` : ''}`;
     } catch { return u; }
   };
+  const decodeMaybePath = (s: string): string => {
+    try {
+      const clean = String(s).trim();
+      if (/^\/.+%[0-9A-Fa-f]{2}/.test(clean)) {
+        const noSlash = clean.replace(/^\/+/, '');
+        return decodeURIComponent(noSlash);
+      }
+      return clean;
+    } catch {
+      return s;
+    }
+  };
   const sanitizeAttrs = (attrs: Record<string, any>) => {
     const out: Record<string, any> = {};
     Object.entries(attrs || {}).forEach(([k, v]) => {
       if (v && typeof v === 'object' && 'type' in v) {
         const t = (v as any).type;
         const val = (v as any).value;
-        if (t === 'img' || t === 'file' || t === 'url' || t === 'string') {
+        if (t === 'img' || t === 'file' || t === 'url') {
           if (typeof val === 'string') {
             out[k] = { ...v, value: sanitizeUrl(val) };
           } else if (val && typeof val === 'object') {
@@ -480,6 +492,12 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
             if (typeof copy.src === 'string') copy.src = sanitizeUrl(copy.src);
             if (typeof copy.url === 'string') copy.url = sanitizeUrl(copy.url);
             out[k] = { ...v, value: copy };
+          } else {
+            out[k] = v;
+          }
+        } else if (t === 'string' || t === 'text') {
+          if (typeof val === 'string') {
+            out[k] = { ...v, value: decodeMaybePath(val) };
           } else {
             out[k] = v;
           }
