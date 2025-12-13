@@ -430,9 +430,9 @@ html, body {
 
 .preview-sandbox {
   * { box-sizing: border-box; }
-  h1, h2, h3, h4, h5, h6 { margin: 0; font-size: inherit; font-weight: inherit; }
-  p { margin: 0; font-size: inherit; }
-  ul, ol { margin: 0; padding: 0; list-style: none; }
+  h1, h2, h3, h4, h5, h6 { margin: 0; }
+  p { margin: 0; }
+  ul, ol { margin: 0; padding: 0; }
   blockquote, figure, pre { margin: 0; padding: 0; }
 }
 
