@@ -443,8 +443,21 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
 
   const sanitizeUrl = (u: string): string => {
     try {
-      const [base, hash] = u.split('#');
-      const urlObj = new URL(base, typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+      const clean = String(u).trim().replace(/^`+|`+$/g, '').replace(/^"+|"+$/g, '').replace(/^'+|'+$/g, '');
+      const [base, hash] = clean.split('#');
+      if (/^https?:\/\//i.test(base)) {
+        const urlObj = new URL(base);
+        urlObj.searchParams.delete('v');
+        return `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}${urlObj.search}${hash ? `#${hash}` : ''}`;
+      }
+      if (base.startsWith('//')) {
+        const abs = `https:${base}`;
+        const urlObj = new URL(abs);
+        urlObj.searchParams.delete('v');
+        return `${urlObj.protocol}//${urlObj.host}${urlObj.pathname}${urlObj.search}${hash ? `#${hash}` : ''}`;
+      }
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+      const urlObj = new URL(base, origin);
       urlObj.searchParams.delete('v');
       return `${urlObj.pathname}${urlObj.search}${hash ? `#${hash}` : ''}`;
     } catch { return u; }
