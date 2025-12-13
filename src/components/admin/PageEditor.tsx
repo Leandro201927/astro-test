@@ -64,6 +64,10 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
     if (clean.startsWith('//')) return `https:${clean}`;
     // Normalize keys that may start with '/'
     const keyCandidate = clean.replace(/^\/+/, '');
+    // Heurística para rutas externas conocidas (dribbble)
+    if (/^userupload\//.test(keyCandidate)) {
+      return `https://cdn.dribbble.com/${keyCandidate}`;
+    }
     // Try to resolve from media map (original and normalized)
     const resolved = mediaMap.get(clean) || mediaMap.get(keyCandidate);
     if (resolved) return resolved;

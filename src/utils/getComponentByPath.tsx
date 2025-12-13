@@ -12,6 +12,7 @@ export async function getComponentByPath(
       if (/^https?:\/\//i.test(clean) || clean.startsWith('/api/admin/media/file') || /^data:image\//i.test(clean)) return clean;
       if (clean.startsWith('//')) return `https:${clean}`;
       const keyCandidate = clean.replace(/^\/+/, '');
+      if (/^userupload\//.test(keyCandidate)) return `https://cdn.dribbble.com/${keyCandidate}`;
       return `/api/admin/media/file?key=${encodeURIComponent(keyCandidate)}`;
     };
     const toVarOrHex = (val: unknown): unknown => {
