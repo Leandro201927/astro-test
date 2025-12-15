@@ -753,7 +753,7 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
                          </div>
                       )}
 
-                      <div className="page-content-wrapper" style={{ minHeight: '50vh' }}>
+                      <div className="page-content-wrapper">
                         {Array.isArray(currentPage.components) && currentPage.components.map((component, i) => {
                           const dir = String(component.atomic_hierarchy).endsWith("s") ? String(component.atomic_hierarchy) : `${component.atomic_hierarchy}s`;
                           const componentPath = `${dir}/${component.name}`;
@@ -1062,7 +1062,6 @@ export default function PageEditor({ initialPages, initialUser, globalComponents
 
                       {arrayAttrs.entries.length > 0 && (
                         <div className="form-group">
-                          <label>Arrays</label>
                           {arrayAttrs.entries.map(([k, v]) => {
                             const arr = Array.isArray(v?.value) ? (v.value as any[]) : [];
                             const complex = arr.length > 0 && arr.every((it) => it && typeof it === 'object' && it.type === 'object' && it.value && typeof it.value === 'object');
