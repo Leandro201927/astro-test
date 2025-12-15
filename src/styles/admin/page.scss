@@ -390,6 +390,7 @@ html, body {
   justify-content: center;
   align-items: flex-start; /* Start from top */
   position: relative;
+  overflow-y: auto;
 }
 
 .preview-wrapper {
