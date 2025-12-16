@@ -1,4 +1,112 @@
 {
-  "header": null,
-  "footer": null
+  "footer": {
+    "name": "footer-1",
+    "custom_attrs": {
+      "logo": {
+        "type": "img",
+        "value": "http://localhost:4000/api/cloudflare/r2/file/3a6e2a61-e3bb-419c-8729-0b20bcc2da4a?key=1764984578369_bastante-joven-haciendo-selfie-en-pared-blanca.jpg"
+      },
+      "navigation": {
+        "type": "array",
+        "value": [
+          {
+            "type": "object",
+            "value": {
+              "url": "/",
+              "label": "Inicio"
+            }
+          },
+          {
+            "type": "object",
+            "value": {
+              "url": "/servicios",
+              "label": "Servicios"
+            }
+          },
+          {
+            "type": "object",
+            "value": {
+              "url": "/sobre-nosoros",
+              "label": "Sobre nosotros"
+            }
+          },
+          {
+            "type": "object",
+            "value": {
+              "url": "/contacto",
+              "label": "Contacto"
+            }
+          }
+        ]
+      },
+      "cta_button_text": {
+        "type": "string",
+        "value": "Comenzar"
+      },
+      "color_background": {
+        "type": "color",
+        "value": "var:background"
+      },
+      "cta_button_background": {
+        "type": "color",
+        "value": "var:primary"
+      }
+    },
+    "atomic_hierarchy": "organism"
+  },
+  "header": {
+    "name": "header-1",
+    "custom_attrs": {
+      "logo": {
+        "type": "img",
+        "value": "http://localhost:4000/api/cloudflare/r2/file/3a6e2a61-e3bb-419c-8729-0b20bcc2da4a?key=1765228397760_leadev%20logo.png"
+      },
+      "navigation": {
+        "type": "array",
+        "value": [
+          {
+            "type": "object",
+            "value": {
+              "url": "/",
+              "label": "Inicio"
+            }
+          },
+          {
+            "type": "object",
+            "value": {
+              "url": "/servicios",
+              "label": "Servicios"
+            }
+          },
+          {
+            "type": "object",
+            "value": {
+              "url": "/sobre-nosoros",
+              "label": "Sobre nosotros"
+            }
+          },
+          {
+            "type": "object",
+            "value": {
+              "url": "/contacto",
+              "label": "Contacto"
+            }
+          }
+        ]
+      },
+      "cta_button_text": {
+        "type": "string",
+        "value": "Comenzar"
+      },
+      "color_background": {
+        "type": "color",
+        "value": "var:background"
+      },
+      "cta_button_background": {
+        "type": "color",
+        "value": "var:primary"
+      }
+    },
+    "atomic_hierarchy": "organism"
+  }
 }
